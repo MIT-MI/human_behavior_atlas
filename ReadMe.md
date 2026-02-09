@@ -63,6 +63,8 @@ This repository is maintained by:
 
 **Keane Ong** [Google Scholar](https://scholar.google.com/citations?user=fMPgRDMAAAAJ&hl=en) | [LinkedIn](www.linkedin.com/in/kowy) | [Email](keaneong@mit.edu)
 
+**Sabri Boughorbel** [Google Scholar](https://scholar.google.nl/citations?user=EhFf3j0AAAAJ&hl=en) | [LinkedIn](https://www.linkedin.com/in/sabriboughorbel/) | [Email](sabri.boughorbel@gmail.com)
+
 ---
 
 ## 📚 Citation

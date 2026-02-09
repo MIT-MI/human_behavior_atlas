@@ -61,9 +61,7 @@ This repository will include:
 
 This repository is maintained by:
 
-**Keane Ong**
-🎓 [Google Scholar](https://scholar.google.com/citations?user=fMPgRDMAAAAJ&hl=en) |  💼 [LinkedIn](www.linkedin.com/in/kowy)
-📧 Contact: keaneong@mit.edu | keane.ongweiyang@u.nus.edu
+**Keane Ong** [Google Scholar](https://scholar.google.com/citations?user=fMPgRDMAAAAJ&hl=en) | [LinkedIn](www.linkedin.com/in/kowy) | [Email](keaneong@mit.edu)
 
 ---
 

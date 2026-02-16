@@ -36,6 +36,48 @@ https://huggingface.co/datasets/keentomato/human_behavior_atlas
 
 This dataset aggregates and standardizes multiple behavioral datasets into a unified evaluation framework for multimodal behavioral understanding.
 
+### Benchmark Structure
+
+The downloaded dataset contains the following:
+
+- **JSONL splits** — centralized metadata files that define all samples:
+  - `final_v8_train_cleaned_2.jsonl` — training set
+  - `final_v8_val_cleaned.jsonl` — validation set
+  - `final_v8_test_cleaned.jsonl` — test set
+- **Raw media files** — video, audio, and text files referenced by each sample
+- **Behavioral features** — pre-extracted feature files (`.pt`) for pose, OpenSMILE audio features, etc.
+
+Each line in the JSONL files is a self-contained sample with all the information needed for loading. For example:
+
+```json
+{
+  "problem": "<audio>\nDon't forget a jacket.\nThe above is a speech recording along with the transcript from a clinical context. What emotion is the speaker expressing? Answer with one word from the following: anger, disgust, fear, happy, neutral, sad",
+  "answer": "sad",
+  "images": [],
+  "videos": [],
+  "audios": ["cremad_dataset_audio/1077_DFA_SAD_XX.wav"],
+  "dataset": "cremad",
+  "texts": [],
+  "modality_signature": "text_audio",
+  "ext_video_feats": ["pose/cremad_dataset_audio/1077_DFA_SAD_XX.pt"],
+  "ext_audio_feats": ["opensmile/cremad_dataset_audio/1077_DFA_SAD_XX.pt"],
+  "task": "emotion_cls",
+  "class_label": "sad"
+}
+```
+
+Key fields:
+- `problem` / `answer` — the prompt and ground-truth label
+- `images`, `videos`, `audios`, `texts` — relative paths to raw media files
+- `ext_video_feats`, `ext_audio_feats` — relative paths to pre-extracted behavioral feature files (`.pt`)
+- `modality_signature` — indicates which modalities are present (e.g., `text_audio`, `video`, `text_video`)
+- `dataset` — source dataset name
+- `task` / `class_label` — behavioral task type and label
+
+The dataloader uses this JSONL as the centralized index to locate and load all raw media and feature files for each sample into the model.
+
+> **Note:** The JSONL files sit at the root level of the downloaded dataset, while the raw media files and feature files are nested within subdirectories. All paths in the JSONL are relative to the root level (i.e., the same directory as the JSONL files themselves).
+
 ---
 
 ## 🤖 Models

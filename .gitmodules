@@ -1,0 +1,4 @@
+[submodule "verl"]
+	path = verl
+	url = https://github.com/DDVD233/verl.git
+	branch = hba_public_release

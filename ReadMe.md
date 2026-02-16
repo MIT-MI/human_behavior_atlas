@@ -8,10 +8,10 @@ Human Behavior Atlas provides a comprehensive evaluation framework spanning dive
 
 ## 📰 News
 
-- 🎉 **[Feb 2026] Human Behavior Atlas accepted to ICLR 2026 Main Conference**
-- 📄 **[October 2025] Paper available on arXiv**
+- 📄 **[Feb 2026] Preprint on a follow-up paper, OmniSapiens 2.0 available on arXiv: https://arxiv.org/pdf/2602.10635**
+- 🎉 **[Jan 2026] Human Behavior Atlas accepted to ICLR 2026 Main Conference**
+- 📄 **[October 2025] Human Behavior Atlas Paper available on arXiv**
 - 🤖 **[October 2025] OmniSapiens-7B RL model released on Hugging Face**
-- 🚧 Training and evaluation code coming soon
 
 (This section will be continuously updated.)
 
@@ -22,7 +22,7 @@ Human Behavior Atlas provides a comprehensive evaluation framework spanning dive
 **Human Behavior Atlas: Benchmarking Unified Psychological and Social Behavior Understanding**  
 Accepted to **ICLR 2026 Main Conference**
 
-📎 Paper:  
+📎 Human Behavior Atlas Paper:  
 https://openreview.net/forum?id=ZKE23BBvlQ
 
 ---

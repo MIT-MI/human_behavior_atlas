@@ -1,8 +1,8 @@
 # 🧠 Human Behavior Atlas
 
-Official repository for **Human Behavior Atlas (HBA)**, a large-scale benchmark for unified psychological and social behavior understanding.
+Official repository for **Human Behavior Atlas (HBA)**, a large-scale benchmark for human behavior analysis. 
 
-Human Behavior Atlas provides a comprehensive evaluation framework spanning diverse behavioral domains, including emotion recognition, sentiment understanding, humor and sarcasm detection, intent recognition, non-verbal communication, and mental health indicators. The benchmark is designed to facilitate the development and evaluation of **socially intelligent AI systems** capable of grounded behavioral reasoning across multimodal inputs.
+Human Behavior Atlas provides a comprehensive training and evaluation framework spanning diverse behavioral domains, including emotion recognition, sentiment understanding, humor and sarcasm detection, intent recognition, non-verbal communication, and mental health indicators. The benchmark is designed to facilitate the development and evaluation of **socially intelligent foundation models** capable of grounded behavioral reasoning across multimodal inputs.
 
 ---
 
@@ -10,7 +10,7 @@ Human Behavior Atlas provides a comprehensive evaluation framework spanning dive
 
 - 📄 **[Feb 2026] Preprint on a follow-up paper, OmniSapiens 2.0 available on arXiv: https://arxiv.org/pdf/2602.10635**
 - 🎉 **[Jan 2026] Human Behavior Atlas accepted to ICLR 2026 Main Conference**
-- 📄 **[October 2025] Human Behavior Atlas Paper available on arXiv**
+- 📄 **[October 2025] Preprint of Human Behavior Atlas Paper released**
 - 🤖 **[October 2025] OmniSapiens-7B RL model released on Hugging Face**
 
 (This section will be continuously updated.)

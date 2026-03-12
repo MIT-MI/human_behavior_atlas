@@ -8,7 +8,7 @@ Human Behavior Atlas provides a comprehensive training and evaluation framework 
 
 ## 📰 News
 
-- 🚀 **[March 2026] All code for the paper Human Behavior Atlas has been uploaded!**
+- 🚀 **[March 2026] All code, models, and benchmark data for the ICLR paper Human Behavior Atlas has been uploaded!**
 - 📄 **[Feb 2026] Preprint on a follow-up paper, OmniSapiens 2.0 available on arXiv: https://arxiv.org/pdf/2602.10635**
 - 🎉 **[Jan 2026] Human Behavior Atlas accepted to ICLR 2026 Main Conference**
 - 📄 **[October 2025] Preprint of Human Behavior Atlas Paper released**

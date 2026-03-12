@@ -1,0 +1,654 @@
+{
+  "label_mapping": {
+    "chsimsv2_highly negative": 0,
+    "chsimsv2_highly positive": 6,
+    "chsimsv2_neutral": 3,
+    "chsimsv2_weakly negative": 2,
+    "chsimsv2_weakly positive": 4,
+    "cremad_anger": 7,
+    "cremad_disgust": 8,
+    "cremad_fear": 9,
+    "cremad_happy": 10,
+    "cremad_neutral": 11,
+    "cremad_sad": 13,
+    "daicwoz_depression": 18,
+    "daicwoz_no depression": 17,
+    "meld_emotion_anger": 7,
+    "meld_emotion_disgust": 8,
+    "meld_emotion_fear": 9,
+    "meld_emotion_happy": 10,
+    "meld_emotion_neutral": 11,
+    "meld_emotion_sad": 13,
+    "meld_emotion_surprise": 14,
+    "meld_senti_negative": 1,
+    "meld_senti_neutral": 3,
+    "meld_senti_positive": 5,
+    "mmpsy_anxiety_anxiety": 20,
+    "mmpsy_anxiety_no anxiety": 19,
+    "mmpsy_depression_depression": 18,
+    "mmpsy_depression_no depression": 17,
+    "mmsd_not sarcasm": 21,
+    "mmsd_sarcasm": 22,
+    "mosei_emotion_anger": 7,
+    "mosei_emotion_disgust": 8,
+    "mosei_emotion_fear": 9,
+    "mosei_emotion_happy": 10,
+    "mosei_emotion_sad": 13,
+    "mosei_emotion_surprise": 14,
+    "mosei_senti_highly negative": 0,
+    "mosei_senti_highly positive": 6,
+    "mosei_senti_negative": 1,
+    "mosei_senti_neutral": 3,
+    "mosei_senti_positive": 5,
+    "mosei_senti_weakly negative": 2,
+    "mosei_senti_weakly positive": 4,
+    "ptsd_in_the_wild_no ptsd": 15,
+    "ptsd_in_the_wild_ptsd": 16,
+    "tess_anger": 7,
+    "tess_disgust": 8,
+    "tess_fear": 9,
+    "tess_happy": 10,
+    "tess_neutral": 11,
+    "tess_sad": 13,
+    "tess_surprise": 14,
+    "urfunny_humour": 24,
+    "urfunny_not humour": 23
+  },
+  "num_classes": 25,
+  "datasets": [
+    "chsimsv2",
+    "cremad",
+    "daicwoz",
+    "meld_emotion",
+    "meld_senti",
+    "mmpsy_anxiety",
+    "mmpsy_depression",
+    "mmsd",
+    "mosei_emotion",
+    "mosei_senti",
+    "ptsd_in_the_wild",
+    "tess",
+    "urfunny"
+  ],
+  "dataset_labels": {
+    "chsimsv2": [
+      "highly negative",
+      "highly positive",
+      "neutral",
+      "weakly negative",
+      "weakly positive"
+    ],
+    "cremad": [
+      "anger",
+      "disgust",
+      "fear",
+      "happy",
+      "neutral",
+      "sad"
+    ],
+    "daicwoz": [
+      "depression",
+      "no depression"
+    ],
+    "meld_emotion": [
+      "anger",
+      "disgust",
+      "fear",
+      "happy",
+      "neutral",
+      "sad",
+      "surprise"
+    ],
+    "meld_senti": [
+      "negative",
+      "neutral",
+      "positive"
+    ],
+    "mmpsy_anxiety": [
+      "anxiety",
+      "no anxiety"
+    ],
+    "mmpsy_depression": [
+      "depression",
+      "no depression"
+    ],
+    "mmsd": [
+      "not sarcasm",
+      "sarcasm"
+    ],
+    "mosei_emotion": [
+      "anger",
+      "disgust",
+      "fear",
+      "happy",
+      "sad",
+      "surprise"
+    ],
+    "mosei_senti": [
+      "highly negative",
+      "highly positive",
+      "negative",
+      "neutral",
+      "positive",
+      "weakly negative",
+      "weakly positive"
+    ],
+    "ptsd_in_the_wild": [
+      "no ptsd",
+      "ptsd"
+    ],
+    "tess": [
+      "anger",
+      "disgust",
+      "fear",
+      "happy",
+      "neutral",
+      "sad",
+      "surprise"
+    ],
+    "urfunny": [
+      "humour",
+      "not humour"
+    ]
+  },
+  "meta": {
+    "created_at": "2026-03-11T08:22:41.082064Z",
+    "excluded_qa_datasets": [
+      "intentqa",
+      "mimeqa",
+      "siq2"
+    ],
+    "domains": {
+      "sentiment_intensity": [
+        "highly negative",
+        "negative",
+        "weakly negative",
+        "neutral",
+        "weakly positive",
+        "positive",
+        "highly positive"
+      ],
+      "emotion": [
+        "anger",
+        "disgust",
+        "fear",
+        "happy",
+        "neutral",
+        "calm",
+        "sad",
+        "surprise"
+      ],
+      "mental_health_ptsd": [
+        "no ptsd",
+        "ptsd"
+      ],
+      "mental_health_depression": [
+        "no depression",
+        "depression"
+      ],
+      "mental_health_anxiety": [
+        "no anxiety",
+        "anxiety"
+      ],
+      "sarcasm": [
+        "not sarcasm",
+        "sarcasm"
+      ],
+      "humour": [
+        "not humour",
+        "humour"
+      ]
+    },
+    "dataset_domain": {
+      "chsimsv2": "sentiment_intensity",
+      "mosei_senti": "sentiment_intensity",
+      "meld_senti": "sentiment_intensity",
+      "cremad": "emotion",
+      "meld_emotion": "emotion",
+      "mosei_emotion": "emotion",
+      "tess": "emotion",
+      "ptsd_in_the_wild": "mental_health_ptsd",
+      "mmpsy_depression": "mental_health_depression",
+      "mmpsy_anxiety": "mental_health_anxiety",
+      "daicwoz": "mental_health_depression",
+      "mmsd": "sarcasm",
+      "urfunny": "humour"
+    },
+    "global_classes": {
+      "sentiment_intensity": [
+        {
+          "index": 0,
+          "label": "highly negative"
+        },
+        {
+          "index": 1,
+          "label": "negative"
+        },
+        {
+          "index": 2,
+          "label": "weakly negative"
+        },
+        {
+          "index": 3,
+          "label": "neutral"
+        },
+        {
+          "index": 4,
+          "label": "weakly positive"
+        },
+        {
+          "index": 5,
+          "label": "positive"
+        },
+        {
+          "index": 6,
+          "label": "highly positive"
+        }
+      ],
+      "emotion": [
+        {
+          "index": 7,
+          "label": "anger"
+        },
+        {
+          "index": 8,
+          "label": "disgust"
+        },
+        {
+          "index": 9,
+          "label": "fear"
+        },
+        {
+          "index": 10,
+          "label": "happy"
+        },
+        {
+          "index": 11,
+          "label": "neutral"
+        },
+        {
+          "index": 12,
+          "label": "calm"
+        },
+        {
+          "index": 13,
+          "label": "sad"
+        },
+        {
+          "index": 14,
+          "label": "surprise"
+        }
+      ],
+      "mental_health_ptsd": [
+        {
+          "index": 15,
+          "label": "no ptsd"
+        },
+        {
+          "index": 16,
+          "label": "ptsd"
+        }
+      ],
+      "mental_health_depression": [
+        {
+          "index": 17,
+          "label": "no depression"
+        },
+        {
+          "index": 18,
+          "label": "depression"
+        }
+      ],
+      "mental_health_anxiety": [
+        {
+          "index": 19,
+          "label": "no anxiety"
+        },
+        {
+          "index": 20,
+          "label": "anxiety"
+        }
+      ],
+      "sarcasm": [
+        {
+          "index": 21,
+          "label": "not sarcasm"
+        },
+        {
+          "index": 22,
+          "label": "sarcasm"
+        }
+      ],
+      "humour": [
+        {
+          "index": 23,
+          "label": "not humour"
+        },
+        {
+          "index": 24,
+          "label": "humour"
+        }
+      ]
+    },
+    "unified_detail": {
+      "chsimsv2_highly negative": {
+        "domain": "sentiment_intensity",
+        "unified_label": "highly negative",
+        "global_index": 0,
+        "notes": ""
+      },
+      "chsimsv2_highly positive": {
+        "domain": "sentiment_intensity",
+        "unified_label": "highly positive",
+        "global_index": 6,
+        "notes": ""
+      },
+      "chsimsv2_neutral": {
+        "domain": "sentiment_intensity",
+        "unified_label": "neutral",
+        "global_index": 3,
+        "notes": ""
+      },
+      "chsimsv2_weakly negative": {
+        "domain": "sentiment_intensity",
+        "unified_label": "weakly negative",
+        "global_index": 2,
+        "notes": ""
+      },
+      "chsimsv2_weakly positive": {
+        "domain": "sentiment_intensity",
+        "unified_label": "weakly positive",
+        "global_index": 4,
+        "notes": ""
+      },
+      "cremad_anger": {
+        "domain": "emotion",
+        "unified_label": "anger",
+        "global_index": 7,
+        "notes": ""
+      },
+      "cremad_disgust": {
+        "domain": "emotion",
+        "unified_label": "disgust",
+        "global_index": 8,
+        "notes": ""
+      },
+      "cremad_fear": {
+        "domain": "emotion",
+        "unified_label": "fear",
+        "global_index": 9,
+        "notes": ""
+      },
+      "cremad_happy": {
+        "domain": "emotion",
+        "unified_label": "happy",
+        "global_index": 10,
+        "notes": ""
+      },
+      "cremad_neutral": {
+        "domain": "emotion",
+        "unified_label": "neutral",
+        "global_index": 11,
+        "notes": ""
+      },
+      "cremad_sad": {
+        "domain": "emotion",
+        "unified_label": "sad",
+        "global_index": 13,
+        "notes": ""
+      },
+      "daicwoz_depression": {
+        "domain": "mental_health_depression",
+        "unified_label": "depression",
+        "global_index": 18,
+        "notes": ""
+      },
+      "daicwoz_no depression": {
+        "domain": "mental_health_depression",
+        "unified_label": "no depression",
+        "global_index": 17,
+        "notes": ""
+      },
+      "meld_emotion_anger": {
+        "domain": "emotion",
+        "unified_label": "anger",
+        "global_index": 7,
+        "notes": ""
+      },
+      "meld_emotion_disgust": {
+        "domain": "emotion",
+        "unified_label": "disgust",
+        "global_index": 8,
+        "notes": ""
+      },
+      "meld_emotion_fear": {
+        "domain": "emotion",
+        "unified_label": "fear",
+        "global_index": 9,
+        "notes": ""
+      },
+      "meld_emotion_happy": {
+        "domain": "emotion",
+        "unified_label": "happy",
+        "global_index": 10,
+        "notes": ""
+      },
+      "meld_emotion_neutral": {
+        "domain": "emotion",
+        "unified_label": "neutral",
+        "global_index": 11,
+        "notes": ""
+      },
+      "meld_emotion_sad": {
+        "domain": "emotion",
+        "unified_label": "sad",
+        "global_index": 13,
+        "notes": ""
+      },
+      "meld_emotion_surprise": {
+        "domain": "emotion",
+        "unified_label": "surprise",
+        "global_index": 14,
+        "notes": ""
+      },
+      "meld_senti_negative": {
+        "domain": "sentiment_intensity",
+        "unified_label": "negative",
+        "global_index": 1,
+        "notes": ""
+      },
+      "meld_senti_neutral": {
+        "domain": "sentiment_intensity",
+        "unified_label": "neutral",
+        "global_index": 3,
+        "notes": ""
+      },
+      "meld_senti_positive": {
+        "domain": "sentiment_intensity",
+        "unified_label": "positive",
+        "global_index": 5,
+        "notes": ""
+      },
+      "mmpsy_anxiety_anxiety": {
+        "domain": "mental_health_anxiety",
+        "unified_label": "anxiety",
+        "global_index": 20,
+        "notes": ""
+      },
+      "mmpsy_anxiety_no anxiety": {
+        "domain": "mental_health_anxiety",
+        "unified_label": "no anxiety",
+        "global_index": 19,
+        "notes": ""
+      },
+      "mmpsy_depression_depression": {
+        "domain": "mental_health_depression",
+        "unified_label": "depression",
+        "global_index": 18,
+        "notes": ""
+      },
+      "mmpsy_depression_no depression": {
+        "domain": "mental_health_depression",
+        "unified_label": "no depression",
+        "global_index": 17,
+        "notes": ""
+      },
+      "mmsd_not sarcasm": {
+        "domain": "sarcasm",
+        "unified_label": "not sarcasm",
+        "global_index": 21,
+        "notes": "Unrecognized boolean label for sarcasm."
+      },
+      "mmsd_sarcasm": {
+        "domain": "sarcasm",
+        "unified_label": "sarcasm",
+        "global_index": 22,
+        "notes": "Unrecognized boolean label for sarcasm."
+      },
+      "mosei_emotion_anger": {
+        "domain": "emotion",
+        "unified_label": "anger",
+        "global_index": 7,
+        "notes": ""
+      },
+      "mosei_emotion_disgust": {
+        "domain": "emotion",
+        "unified_label": "disgust",
+        "global_index": 8,
+        "notes": ""
+      },
+      "mosei_emotion_fear": {
+        "domain": "emotion",
+        "unified_label": "fear",
+        "global_index": 9,
+        "notes": ""
+      },
+      "mosei_emotion_happy": {
+        "domain": "emotion",
+        "unified_label": "happy",
+        "global_index": 10,
+        "notes": ""
+      },
+      "mosei_emotion_sad": {
+        "domain": "emotion",
+        "unified_label": "sad",
+        "global_index": 13,
+        "notes": ""
+      },
+      "mosei_emotion_surprise": {
+        "domain": "emotion",
+        "unified_label": "surprise",
+        "global_index": 14,
+        "notes": ""
+      },
+      "mosei_senti_highly negative": {
+        "domain": "sentiment_intensity",
+        "unified_label": "highly negative",
+        "global_index": 0,
+        "notes": ""
+      },
+      "mosei_senti_highly positive": {
+        "domain": "sentiment_intensity",
+        "unified_label": "highly positive",
+        "global_index": 6,
+        "notes": ""
+      },
+      "mosei_senti_negative": {
+        "domain": "sentiment_intensity",
+        "unified_label": "negative",
+        "global_index": 1,
+        "notes": ""
+      },
+      "mosei_senti_neutral": {
+        "domain": "sentiment_intensity",
+        "unified_label": "neutral",
+        "global_index": 3,
+        "notes": ""
+      },
+      "mosei_senti_positive": {
+        "domain": "sentiment_intensity",
+        "unified_label": "positive",
+        "global_index": 5,
+        "notes": ""
+      },
+      "mosei_senti_weakly negative": {
+        "domain": "sentiment_intensity",
+        "unified_label": "weakly negative",
+        "global_index": 2,
+        "notes": ""
+      },
+      "mosei_senti_weakly positive": {
+        "domain": "sentiment_intensity",
+        "unified_label": "weakly positive",
+        "global_index": 4,
+        "notes": ""
+      },
+      "ptsd_in_the_wild_no ptsd": {
+        "domain": "mental_health_ptsd",
+        "unified_label": "no ptsd",
+        "global_index": 15,
+        "notes": ""
+      },
+      "ptsd_in_the_wild_ptsd": {
+        "domain": "mental_health_ptsd",
+        "unified_label": "ptsd",
+        "global_index": 16,
+        "notes": ""
+      },
+      "tess_anger": {
+        "domain": "emotion",
+        "unified_label": "anger",
+        "global_index": 7,
+        "notes": ""
+      },
+      "tess_disgust": {
+        "domain": "emotion",
+        "unified_label": "disgust",
+        "global_index": 8,
+        "notes": ""
+      },
+      "tess_fear": {
+        "domain": "emotion",
+        "unified_label": "fear",
+        "global_index": 9,
+        "notes": ""
+      },
+      "tess_happy": {
+        "domain": "emotion",
+        "unified_label": "happy",
+        "global_index": 10,
+        "notes": ""
+      },
+      "tess_neutral": {
+        "domain": "emotion",
+        "unified_label": "neutral",
+        "global_index": 11,
+        "notes": ""
+      },
+      "tess_sad": {
+        "domain": "emotion",
+        "unified_label": "sad",
+        "global_index": 13,
+        "notes": ""
+      },
+      "tess_surprise": {
+        "domain": "emotion",
+        "unified_label": "surprise",
+        "global_index": 14,
+        "notes": ""
+      },
+      "urfunny_humour": {
+        "domain": "humour",
+        "unified_label": "humour",
+        "global_index": 24,
+        "notes": "Unrecognized boolean label for humour."
+      },
+      "urfunny_not humour": {
+        "domain": "humour",
+        "unified_label": "not humour",
+        "global_index": 23,
+        "notes": "Unrecognized boolean label for humour."
+      }
+    }
+  }
+}

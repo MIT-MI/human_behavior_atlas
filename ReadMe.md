@@ -8,6 +8,7 @@ Human Behavior Atlas provides a comprehensive training and evaluation framework 
 
 ## 📰 News
 
+- 🚀 **[March 2026] All code for the paper Human Behavior Atlas has been uploaded!**
 - 📄 **[Feb 2026] Preprint on a follow-up paper, OmniSapiens 2.0 available on arXiv: https://arxiv.org/pdf/2602.10635**
 - 🎉 **[Jan 2026] Human Behavior Atlas accepted to ICLR 2026 Main Conference**
 - 📄 **[October 2025] Preprint of Human Behavior Atlas Paper released**
@@ -82,11 +83,17 @@ The dataloader uses this JSONL as the centralized index to locate and load all r
 
 ## 🤖 Models
 
-The OmniSapiens-7B RL model, trained using GRPO on the Human Behavior Atlas benchmark, is available on [Huggingface](https://huggingface.co/ddvd233/OmniSapiens-7B-RL)
+The following OmniSapiens models are publicly available on Hugging Face:
 
-OmniSapiens-7B RL is the first iteration of a unified multimodal behavioral model for social reasoning and behavioral understanding across diverse behavioral domains.
+| Model | Description | Link |
+|---|---|---|
+| OmniSapiens-7B RL | Trained with GRPO on HBA | [ddvd233/OmniSapiens-7B-RL](https://huggingface.co/ddvd233/OmniSapiens-7B-RL) |
+| OmniSapiens-7B SFT | SFT model with classification + QA heads | [keentomato/omnisapiens_sft](https://huggingface.co/keentomato/omnisapiens_sft) |
+| OmniSapiens BAM — Humour Detection | BAM adapter for humour detection | [keentomato/omnisapiens_bam_humour_detection](https://huggingface.co/keentomato/omnisapiens_bam_humour_detection) |
+| OmniSapiens BAM — Sentiment Polarity (MOSEI) | BAM adapter for sentiment polarity | [keentomato/omnisapiens_bam_sentiment_polarity_mosei](https://huggingface.co/keentomato/omnisapiens_bam_sentiment_polarity_mosei) |
+| OmniSapiens BAM — Sarcasm Detection | BAM adapter for sarcasm detection | [keentomato/omnisapiens_bam_sarcasm_detection](https://huggingface.co/keentomato/omnisapiens_bam_sarcasm_detection) |
 
-OmniSapiens-7B SFT and BAM will be released shortly!
+OmniSapiens-7B RL is the first iteration of a unified multimodal behavioral model for social reasoning and behavioral understanding across diverse behavioral domains. The BAM models pertaining to higher-performing specialized adapters released to support the community's downstream tasks. OmniSapiens-7B 2.0 will be released after the review process
 
 ---
 
@@ -163,7 +170,15 @@ git clone https://github.com/hiyouga/MathRuler.git
 cd MathRuler && pip install . && cd ..
 ```
 
-**8. Set up PYTHONPATH:**
+**8. Install LLM judge evaluation dependencies:**
+
+```bash
+pip install pandas tqdm tenacity anthropic openai wandb
+```
+
+These are required for `misc_eval_utils/llm_grader/llm_judge_eval.py`, which grades free-form QA outputs using an LLM judge.
+
+**9. Set up PYTHONPATH:**
 
 Add the following to your `~/.bashrc` (or equivalent), replacing the path with the absolute path to your cloned `verl` submodule:
 
@@ -183,6 +198,52 @@ bash _train_grpo_hba.sh
 Edit `_train_grpo_hba.sh` to configure data paths, GPU allocation, and training hyperparameters for your setup.
 
 > **Note:** While the paper uses the GRPO method, the integration with VERL is intended to make it convenient to use other RL variants (e.g., REINFORCE, DAPO). See the [VERL documentation](https://verl.readthedocs.io/) for further instructions on alternative algorithms.
+
+### Supervised Fine-Tuning (SFT)
+
+SFT training follows a three-stage pipeline. Each stage builds on the previous one, so the stages must be run in order.
+
+**Stage 1 — Classification Training**
+
+```bash
+cd sft
+bash run_classification.sh
+```
+
+This trains the OmniSapiens model — a modified Qwen2.5-Omni with per-task classification heads — using LoRA fine-tuning across all behavioral datasets. The model is optimized for classification performance (cross-entropy loss). After training, note the path to the best-performing checkpoint; it will be used as input to Stage 2.
+
+**Stage 2 — QA Training**
+
+```bash
+bash run_qa.sh
+```
+
+Set `--load_checkpoint_path` in `run_qa.sh` to the best checkpoint directory from Stage 1.
+
+In this stage, the backbone (encoder + classification heads) is **frozen**, and only the **decoder (`lm_head`)** is trained with a language modeling loss. The intuition is that OmniSapiens is fundamentally an edited version of Qwen with appended classification heads, and classification performance is the primary optimization target. Unfreezing the backbone during QA training would risk disrupting the classification representations established in Stage 1. By training only the language model head, the model learns to produce free-form textual responses for open-ended QA datasets while leaving the classification behavior untouched.
+
+**Stage 3 — BAM (Behavioral Adapter Module)**
+
+```bash
+bash run_bam.sh
+```
+
+Set the checkpoint path in `run_bam.sh` to the trained model from Stage 1 or Stage 2. BAM trains lightweight per-dataset residual adapters for video and audio features, projecting raw behavioral features into corrections applied to the model's penultimate hidden layer. The rest of the model remains frozen. The script processes one dataset at a time and automatically infers modality and task type from the data.
+
+### Validation
+
+Validation behavior differs by dataset type and applies uniformly across **all training modes** (RL, SFT classification, SFT QA, and BAM):
+
+**Classification datasets** — Validation metrics are logged to W&B automatically during training. No additional steps are required; results will appear in your W&B dashboard as training progresses.
+
+**QA datasets (IntentQA, MIMEQA, SIQ2)** — Because these tasks require free-form text generation, accuracy cannot be computed with exact string matching. After training, run the LLM judge evaluation script:
+
+```bash
+cd misc_eval_utils/llm_grader
+bash run_llm_judge_eval.sh
+```
+
+Edit `run_llm_judge_eval.sh` to set the path to your model's prediction output file. The script uses an LLM judge (OpenAI or Anthropic) to grade each prediction against the ground truth and optionally logs results to W&B. Set the `MIT_OPENAI_API_KEY` or `ANTHROPIC_API_KEY` environment variable depending on which provider you use.
 
 ---
 

@@ -1,0 +1,64 @@
+system:
+  cuda_visible_devices: "2,3"  # Use all available GPUs
+
+mode: "train"  # Mode: train or test
+
+data:
+  train_file: "/path/to/your/data/train.jsonl"
+  val_file: "/path/to/your/data/val.jsonl"
+  test_file: "/path/to/your/data/test.jsonl"
+  label_map_path: "/path/to/your/project/sft/label_maps/meld_label_map.json"
+
+model:
+  tokenizer_name: "Qwen/Qwen2.5-Omni-7B"
+  processor_name: "Qwen/Qwen2.5-Omni-7B"
+  training_strategy: "head_only"  # options: head_only, lora, full
+  device_map: null  # Changed from "auto" to "cpu" for Accelerate compatibility
+  torch_dtype: "float32"
+  lora_config:
+    r: 32
+    alpha: 64
+    dropout: 0.05
+    target_modules: ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "down_proj", "up_proj"]
+
+train:
+  train_batch_size: 2 # Very small batch size for full training of large model
+  val_batch_size: 2
+  test_batch_size: 2 # Test batch size
+  lr: 1e-3  # depending on the different model components, this should be adjusted
+  epochs: 2
+  save_checkpoint_dir: "/path/to/your/checkpoint/dir"
+  load_checkpoint_path: null
+  validation_result_dir: null  # Directory to save validation results (predictions, ground truths, etc.)
+  save_every_n_epochs: 1
+  save_every_n_steps: null  # New: save every N steps (null = use epoch-based saving) One step is 1 batch
+  debug_dry_run: false
+  validate_every_n_epochs: 1
+  validate_every_n_steps: 50  # New: validate every N steps (null = use epoch-based validation) One step is 1 batch
+  early_stopping_patience: 99999
+  gradient_accumulation_steps: 16  # Number of batches to accumulate gradients before updating parameters
+  num_workers: 0  # WARNING: SET THIS TO 0 AS IT SHOULD BE AUTOMATICALLY HANDLED BY ACCELERATE
+  # Scheduler configuration
+  use_scheduler: false  # Set to false to disable scheduler
+  scheduler_type: "cosine"  # Options: "linear", "cosine", "cosine_with_restarts", "polynomial", "constant", "constant_with_warmup"
+  warmup_steps: 100  # Number of warmup steps (set to null to disable warmup)
+
+dataset_config:
+  max_prompt_length: 4096
+  modalities: "images,videos,audio"
+  prompt_key: "problem"
+  image_key: "images"
+  video_key: "videos"
+  audio_key: "audios"
+  label_key: "answer"
+  return_multi_modal_inputs: true
+  num_workers: 0
+  filter_overlong_prompts_workers: 0
+  filter_overlong_prompts: false
+  truncation: "right"
+  format_prompt: "/path/to/your/project/examples/format_prompt/default.jinja"
+
+wandb:
+  use: true
+  project: "omni-classifier-accelerate"
+  entity: null

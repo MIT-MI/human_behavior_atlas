@@ -101,7 +101,7 @@ OmniSapiens-7B RL is the first iteration of a unified multimodal behavioral mode
 
 ### Installation
 
-We use [VERL](https://github.com/volcengine/verl) v0.5.0.dev (included as a submodule) for reinforcement learning training. Follow the steps below to set up the environment.
+We use [VERL](https://github.com/volcengine/verl) v0.5.0.dev (included as a submodule) for reinforcement learning training. Follow the steps below to set up the environment. The same environment is utilized for SFT and BAM.
 
 **1. Clone this repository with the VERL submodule:**
 

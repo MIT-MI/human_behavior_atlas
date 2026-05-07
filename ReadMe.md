@@ -95,11 +95,11 @@ The following OmniSapiens models are publicly available on Hugging Face:
 | Model | Description | Link |
 |---|---|---|
 | OmniSapiens-7B RL | Trained with GRPO on HBA | [ddvd233/OmniSapiens-7B-RL](https://huggingface.co/ddvd233/OmniSapiens-7B-RL) |
-| OmniSapiens-7B SFT | SFT model with classification + QA heads | [keentomato/omnisapiens_sft](https://huggingface.co/keentomato/omnisapiens_sft) |
-| OmniSapiens BAM — Humour Detection | BAM adapter for humour detection | [keentomato/omnisapiens_bam_humour_detection](https://huggingface.co/keentomato/omnisapiens_bam_humour_detection) |
-| OmniSapiens BAM — Sentiment Polarity (MOSEI) | BAM adapter for sentiment polarity | [keentomato/omnisapiens_bam_sentiment_polarity_mosei](https://huggingface.co/keentomato/omnisapiens_bam_sentiment_polarity_mosei) |
-| OmniSapiens BAM — Sarcasm Detection | BAM adapter for sarcasm detection | [keentomato/omnisapiens_bam_sarcasm_detection](https://huggingface.co/keentomato/omnisapiens_bam_sarcasm_detection) |
-| OmniSapiens-7B 2.0 (**Best SOTA Model**)| Reasoning foundation model, trained with Heterogeneity-Aware Relative Policy Optimization (HARPO) on HBA | [Link soon!]()|
+| OmniSapiens SFT | SFT model with classification + QA heads | [HumanBehaviorAtlas/omnisapiens_sft](https://huggingface.co/HumanBehaviorAtlas/omnisapiens_sft) |
+| OmniSapiens BAM — Humour Detection | BAM adapter for humour detection | [HumanBehaviorAtlas/omnisapiens_bam_humour_detection](https://huggingface.co/HumanBehaviorAtlas/omnisapiens_bam_humour_detection) |
+| OmniSapiens BAM — Sentiment Polarity (MOSEI) | BAM adapter for sentiment polarity | [HumanBehaviorAtlas/omnisapiens_bam_sentiment_polarity_mosei](https://huggingface.co/HumanBehaviorAtlas/omnisapiens_bam_sentiment_polarity_mosei) |
+| OmniSapiens BAM — Sarcasm Detection | BAM adapter for sarcasm detection | [HumanBehaviorAtlas/omnisapiens_bam_sarcasm_detection](https://huggingface.co/HumanBehaviorAtlas/omnisapiens_bam_sarcasm_detection) |
+| OmniSapiens 2.0 (**BEST SOTA model**) | Reasoning foundation model trained with Heterogeneity-Aware Relative Policy Optimization (HARPO) on Human Behavior Atlas | [HumanBehaviorAtlas/OmniSapiens2.0](https://huggingface.co/HumanBehaviorAtlas/OmniSapiens2.0) |
 
 OmniSapiens-7B RL is the first iteration of a unified multimodal behavioral model for social reasoning and behavioral understanding across diverse behavioral domains. The BAM models pertaining to higher-performing specialized adapters released to support the community's downstream tasks. 
 OmniSapiens-7B 2.0 is a significantly improved foundation model, trained with a novel reasoning-RL algorithm, Heterogeneity-Aware Relative Policy Optimization (HARPO).

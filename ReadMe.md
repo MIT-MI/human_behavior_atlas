@@ -8,9 +8,10 @@ Human Behavior Atlas provides a comprehensive training and evaluation framework 
 
 ## 📰 News
 
+- 🚀 **[Apr 2026] OmniSapiens 2.0 has been accepted to ICML 2026 Main Conference!**
 - 🚀 **[March 2026] All code, models, and benchmark data for the ICLR paper Human Behavior Atlas has been uploaded!**
 - 📄 **[Feb 2026] Preprint on a follow-up paper, OmniSapiens 2.0 available on arXiv: https://arxiv.org/pdf/2602.10635**
-- 🎉 **[Jan 2026] Human Behavior Atlas accepted to ICLR 2026 Main Conference: https://openreview.net/forum?id=ZKE23BBvlQ**
+- 🎉 **[Jan 2026] Human Behavior Atlas has been accepted to ICLR 2026 Main Conference! https://openreview.net/forum?id=ZKE23BBvlQ**
 - 📄 **[October 2025] Preprint of Human Behavior Atlas Paper released**
 - 🤖 **[October 2025] OmniSapiens-7B RL model released on Hugging Face**
 
@@ -21,10 +22,15 @@ Human Behavior Atlas provides a comprehensive training and evaluation framework 
 ## 📄 Paper
 
 **Human Behavior Atlas: Benchmarking Unified Psychological and Social Behavior Understanding**  
-Accepted to **ICLR 2026 Main Conference**
+Accepted to **ICLR 2026 Main Conference in Rio De Janeiro, Brazil**
 
 📎 Human Behavior Atlas Paper:  
 https://openreview.net/forum?id=ZKE23BBvlQ
+
+**OmniSapiens: A Foundation Model for Social Behavior Processing via Heterogeneity-Aware Relative Policy Optimization**
+Accepted to **ICML 2026 Main Conference in Seoul, South Korea**
+📎 OmniSapiens 2.0 Paper:
+https://arxiv.org/pdf/2602.10635
 
 ---
 
@@ -92,8 +98,10 @@ The following OmniSapiens models are publicly available on Hugging Face:
 | OmniSapiens BAM — Humour Detection | BAM adapter for humour detection | [keentomato/omnisapiens_bam_humour_detection](https://huggingface.co/keentomato/omnisapiens_bam_humour_detection) |
 | OmniSapiens BAM — Sentiment Polarity (MOSEI) | BAM adapter for sentiment polarity | [keentomato/omnisapiens_bam_sentiment_polarity_mosei](https://huggingface.co/keentomato/omnisapiens_bam_sentiment_polarity_mosei) |
 | OmniSapiens BAM — Sarcasm Detection | BAM adapter for sarcasm detection | [keentomato/omnisapiens_bam_sarcasm_detection](https://huggingface.co/keentomato/omnisapiens_bam_sarcasm_detection) |
+| OmniSapiens-7B 2.0 (**Best SOTA Model**)| Reasoning foundation model, trained with Heterogeneity-Aware Relative Policy Optimization (HARPO) on HBA | [Link soon!]()|
 
-OmniSapiens-7B RL is the first iteration of a unified multimodal behavioral model for social reasoning and behavioral understanding across diverse behavioral domains. The BAM models pertaining to higher-performing specialized adapters released to support the community's downstream tasks. OmniSapiens-7B 2.0 will be released after the review process
+OmniSapiens-7B RL is the first iteration of a unified multimodal behavioral model for social reasoning and behavioral understanding across diverse behavioral domains. The BAM models pertaining to higher-performing specialized adapters released to support the community's downstream tasks. 
+OmniSapiens-7B 2.0 is a significantly improved foundation model, trained with a novel reasoning-RL algorithm, Heterogeneity-Aware Relative Policy Optimization (HARPO).
 
 ---
 
@@ -271,3 +279,5 @@ year={2026},
 url={https://openreview.net/forum?id=ZKE23BBvlQ}
 }
 ```
+
+Openreview citation for OmniSapiens 2.0 coming after public-release!

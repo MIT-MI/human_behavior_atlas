@@ -29,6 +29,7 @@ https://openreview.net/forum?id=ZKE23BBvlQ
 
 **OmniSapiens: A Foundation Model for Social Behavior Processing via Heterogeneity-Aware Relative Policy Optimization**
 Accepted to **ICML 2026 Main Conference in Seoul, South Korea**
+
 📎 OmniSapiens 2.0 Paper:
 https://arxiv.org/pdf/2602.10635
 

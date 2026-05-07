@@ -21,16 +21,16 @@ Human Behavior Atlas provides a comprehensive training and evaluation framework 
 
 ## 📄 Paper
 
-**Human Behavior Atlas: Benchmarking Unified Psychological and Social Behavior Understanding**  
+"**Human Behavior Atlas: Benchmarking Unified Psychological and Social Behavior Understanding**"  
 Accepted to **ICLR 2026 Main Conference in Rio De Janeiro, Brazil**
 
 📎 Human Behavior Atlas Paper:  
 https://openreview.net/forum?id=ZKE23BBvlQ
 
-**OmniSapiens: A Foundation Model for Social Behavior Processing via Heterogeneity-Aware Relative Policy Optimization**
+"**OmniSapiens: A Foundation Model for Social Behavior Processing via Heterogeneity-Aware Relative Policy Optimization**"                     
 Accepted to **ICML 2026 Main Conference in Seoul, South Korea**
 
-📎 OmniSapiens 2.0 Paper:
+📎 OmniSapiens 2.0 Paper:                                         
 https://arxiv.org/pdf/2602.10635
 
 ---

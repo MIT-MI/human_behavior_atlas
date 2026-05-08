@@ -1,8 +1,12 @@
-# 🧠 Human Behavior Atlas
+# 🧠 Human Behavior Atlas & OmniSapiens 2.0
 
-Official repository for **Human Behavior Atlas (HBA)**, a large-scale benchmark for human behavior analysis. 
+Official repository for **Human Behavior Atlas (HBA)** ([ICLR 2026](https://openreview.net/pdf?id=ZKE23BBvlQ)), a large-scale benchmark for human behavior analysis, and **OmniSapiens 2.0** ([ICML 2026](https://arxiv.org/pdf/2602.10635)), a first-of-its-kind foundation model for general social behavior processing.
 
 Human Behavior Atlas provides a comprehensive training and evaluation framework spanning diverse behavioral domains, including emotion recognition, sentiment understanding, humor and sarcasm detection, intent recognition, non-verbal communication, and mental health indicators. The benchmark is designed to facilitate the development and evaluation of **socially intelligent foundation models** capable of grounded behavioral reasoning across multimodal inputs.
+
+OmniSapiens 2.0 is a first-of-its-kind foundation model for unified social behavior processing, designed to reason over heterogeneous human behavioral signals across diverse multimodal contexts. Trained using heterogeneity-aware reinforcement learning, the model dynamically balances learning across behavioral tasks, enabling more consistent reasoning and generalization across affective, cognitive, and social understanding settings. 
+
+Together, we hope that HBA and OmniSapiens 2.0 provide a unified ecosystem for advancing socially intelligent AI systems capable of interpretable and robust human behavior understanding.
 
 ---
 
@@ -35,7 +39,7 @@ https://arxiv.org/pdf/2602.10635
 
 ---
 
-## 🤗 Dataset
+## 🤗 Human Behavior Atlas Benchmark
 
 The Human Behavior Atlas benchmark is publicly available on Hugging Face:
 
@@ -90,7 +94,7 @@ The dataloader uses this JSONL as the centralized index to locate and load all r
 
 ## 🤖 Models
 
-The following OmniSapiens models are publicly available on Hugging Face:
+Over the course of the two papers, **Human Behavior Atlas** and **OmniSapiens 2.0**, several OmniSapiens models have been released on hugging face. We provide a brief description of them below.
 
 | Model | Description | Link |
 |---|---|---|
@@ -102,7 +106,7 @@ The following OmniSapiens models are publicly available on Hugging Face:
 | OmniSapiens 2.0 (**BEST SOTA model**) | Reasoning foundation model trained with Heterogeneity-Aware Relative Policy Optimization (HARPO) on Human Behavior Atlas | [HumanBehaviorAtlas/OmniSapiens2.0](https://huggingface.co/HumanBehaviorAtlas/OmniSapiens2.0) |
 
 OmniSapiens-7B RL is the first iteration of a unified multimodal behavioral model for social reasoning and behavioral understanding across diverse behavioral domains. The BAM models pertaining to higher-performing specialized adapters released to support the community's downstream tasks. 
-OmniSapiens-7B 2.0 is a significantly improved foundation model, trained with a novel reasoning-RL algorithm, Heterogeneity-Aware Relative Policy Optimization (HARPO).
+OmniSapiens-7B 2.0 is a significantly improved foundation model, trained with a novel reasoning-RL algorithm, Heterogeneity-Aware Relative Policy Optimization (HARPO), and remains the state-of-the-art model, demonstrating strong multi-task performance, out-of-distribution generalization, and more interpretable reasoning traces. 
 
 ---
 
@@ -197,7 +201,7 @@ export PYTHONPATH="/path/to/human_behavior_atlas/verl:$PYTHONPATH"
 
 ### Reinforcement Learning Training
 
-After downloading the [HBA dataset](https://huggingface.co/datasets/keentomato/human_behavior_atlas), you can launch GRPO training using the provided script:
+After downloading the [HBA benchmark](https://huggingface.co/HumanBehaviorAtlas), you can launch GRPO training using the provided script:
 
 ```bash
 cd verl/examples/grpo_trainer

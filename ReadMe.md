@@ -272,7 +272,8 @@ This repository is maintained by:
 
 ## 📚 Citation
 
-If you use Human Behavior Atlas or OmniSapiens in your research, please cite the following:
+
+## Human Behavior Atlas
 
 ```bibtex
 @inproceedings{
@@ -285,4 +286,13 @@ url={https://openreview.net/forum?id=ZKE23BBvlQ}
 }
 ```
 
-Openreview citation for OmniSapiens 2.0 coming after public-release!
+## OmniSapiens 2.0
+
+```bibtex
+@article{ong2026omnisapiens,
+  title={Omnisapiens: A foundation model for social behavior processing via heterogeneity-aware relative policy optimization},
+  author={Ong, Keane and Boughorbel, Sabri and Xiao, Luwei and Ekbote, Chanakya and Dai, Wei and Qu, Ao and Wu, Jingyao and Mao, Rui and Hoque, Ehsan and Cambria, Erik and others},
+  journal={arXiv preprint arXiv:2602.10635},
+  year={2026}
+}
+```

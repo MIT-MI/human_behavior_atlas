@@ -43,8 +43,11 @@ https://arxiv.org/pdf/2602.10635
 
 The Human Behavior Atlas benchmark is publicly available on Hugging Face:
 
-**Dataset:**  
-https://huggingface.co/datasets/keentomato/human_behavior_atlas
+**Dataset:** 
+We have a version distributed in parquet format, which is generally easier and faster to use with the Hugging Face datasets library and most downstream training pipelines. Although, we also provide the tar version to allow for flexible use.
+
+Parquet version: (https://huggingface.co/datasets/HumanBehaviorAtlas/human_behavior_atlas)
+Tar version: (https://huggingface.co/datasets/HumanBehaviorAtlas/human_behavior_atlas_tar)
 
 This dataset aggregates and standardizes multiple behavioral datasets into a unified evaluation framework for multimodal behavioral understanding.
 

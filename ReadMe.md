@@ -8,6 +8,8 @@ OmniSapiens 2.0 is a first-of-its-kind foundation model for unified social behav
 
 Together, we hope that HBA and OmniSapiens 2.0 provide a unified ecosystem for advancing socially intelligent AI systems capable of interpretable and robust human behavior understanding.
 
+> 🧩 **`parquet_dataloader_omni_mirl` branch:** the **omni / fork** training path — Qwen2.5-Omni-7B SFT (parquet) + **GRPO + TARPO** on the `DDVD233/verl` fork, reading the HBA parquet directly. **➡️ See [`OMNI_TRAINING.md`](OMNI_TRAINING.md).** (For the upstream-verl, vision path, see the `parquet_dataloader` branch.)
+
 ---
 
 ## 📰 News

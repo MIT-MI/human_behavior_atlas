@@ -8,6 +8,8 @@ OmniSapiens 2.0 is a first-of-its-kind foundation model for unified social behav
 
 Together, we hope that HBA and OmniSapiens 2.0 provide a unified ecosystem for advancing socially intelligent AI systems capable of interpretable and robust human behavior understanding.
 
+> 🧩 **`parquet_dataloader` branch:** adds a model-agnostic, **parquet-native SFT + GRPO** pipeline that runs on **upstream [verl](https://github.com/volcengine/verl) `@ main`** — the `verl/` submodule is repointed from the fork, with no `mirl` dependency. `sft/` and `grpo/` are sibling stages. **➡️ See [`PARQUET_TRAINING.md`](PARQUET_TRAINING.md) for setup, configs, and the SFT/GRPO examples.**
+
 ---
 
 ## 📰 News
@@ -115,6 +117,8 @@ OmniSapiens-7B 2.0 is a significantly improved foundation model, trained with a 
 ---
 
 ## ⚙️ Training
+
+> **`parquet_dataloader` branch:** this branch also provides a lighter, **upstream-verl** training path — a parquet-native, model-agnostic **SFT + GRPO** pipeline under [`sft/`](sft/) and [`grpo/`](grpo/), documented in **[`PARQUET_TRAINING.md`](PARQUET_TRAINING.md)**. The instructions below describe the original fork-based (`v0.5.0.dev`) setup.
 
 ### Installation
 

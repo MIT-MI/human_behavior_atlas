@@ -1,12 +1,21 @@
-torch>=2.0.0
-transformers>=4.30.0
+# Requirements for the unified parquet SFT path (accelerate-based; NO verl needed).
+# GRPO has its own stack — see grpo/requirements_grpo.txt and PARQUET_TRAINING.md.
+torch>=2.4.0
+transformers>=4.57.0          # Qwen3-VL needs >=4.57 (Gemma 4 needs transformers 5.x)
+accelerate>=1.0.0
+peft>=0.12.0
 omegaconf>=2.3.0
+pyarrow>=14.0.0               # direct parquet reads (no HF datasets cache)
+pandas>=2.0.0
+numpy>=1.24.0
+Pillow>=9.0.0
+av>=11.0.0                    # PyAV: video frame decoding
+qwen-vl-utils                 # Qwen-VL image/video preprocessing helpers
+jinja2>=3.0.0                 # optional format_prompt templates
+scipy>=1.10.0                 # optional: audio decoding (when modalities includes "audio")
+torchaudio                    # optional: audio resampling
 tqdm>=4.65.0
 wandb>=0.15.0
 scikit-learn>=1.3.0
-numpy>=1.24.0
-pandas>=2.0.0
 PyYAML>=6.0
-accelerate>=0.20.0
-peft>=0.4.0
-bitsandbytes>=0.41.0
+bitsandbytes>=0.41.0          # optional: quantized / full fine-tuning

@@ -1,0 +1,66 @@
+# Unified SFT config — OMNI path (Qwen2.5-Omni-7B) on Human Behavior Atlas parquet.
+#
+# This branch (parquet_dataloader_omni_mirl) targets the omni model on the
+# DDVD233/verl fork, so SFT trains on the full modality mix (audio bulk + video).
+# The dataloader/trainer are model-agnostic — swap model.arch/name to retarget.
+
+data:
+  train_files: "/path/to/human_behavior_atlas_v2"   # override via --train_files or HBA_DATA_DIR
+  val_files: "/path/to/human_behavior_atlas_v2"
+
+model:
+  name: "Qwen/Qwen2.5-Omni-7B"
+  arch: "omni_thinker"          # loads Qwen2_5OmniThinkerForConditionalGeneration
+  training_strategy: "lora"     # "lora" or "full"
+  torch_dtype: "bfloat16"
+  attn_implementation: "sdpa"
+  lora_config:
+    r: 32
+    alpha: 64
+    dropout: 0.05
+    target_modules: ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "down_proj", "up_proj"]
+
+train:
+  train_batch_size: 4
+  val_batch_size: 4
+  lr: 1e-4
+  epochs: 2
+  # Effective batch = train_batch_size * grad_accum * n_gpus (256 @ 1 GPU)
+  gradient_accumulation_steps: 16
+  num_workers: 0
+  save_checkpoint_dir: "./checkpoints/sft_qwen_omni_hba"
+  load_checkpoint_path: null
+  save_every_n_epochs: 1
+  save_every_n_steps: null
+  validate_every_n_epochs: 1
+  validate_every_n_steps: null
+  use_scheduler: true
+  scheduler_type: "cosine"
+  warmup_steps: 10
+  max_grad_norm: 1.0
+  seed: 42
+
+dataset_config:
+  # SFT uses first 10% of train; GRPO/TARPO use the rest.
+  train_split: "train[:10%]"
+  val_split: "validation[:10%]"
+  prompt_key: "problem"
+  response_key: "answer"
+  image_key: "images"
+  video_key: "videos"
+  audio_key: "audios"
+  modality_signature_key: "modality_signature"
+  modalities: "audio,videos"    # omni: train on audio + video rows
+  filter_by_modality: false     # use all rows (omni handles every modality)
+  video_nframes: 8
+  max_prompt_length: 4096
+  max_response_length: 128
+  max_length: 4224
+  truncation: "right"
+  audio_max_seconds: 10
+  format_prompt: null
+
+wandb:
+  use: false
+  project: "sft-qwen-omni-hba"
+  entity: null

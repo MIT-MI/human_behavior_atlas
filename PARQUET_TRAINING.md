@@ -1,5 +1,11 @@
 # Unified Parquet SFT + GRPO on upstream verl
 
+> **⚠️ This describes the upstream-verl _vision_ path, which lives on the
+> [`parquet_dataloader`](https://github.com/MIT-MI/human_behavior_atlas/tree/parquet_dataloader)
+> branch — not `main`.** `main`'s `verl/` submodule is the omni fork (`DDVD233/verl`), so the
+> GRPO recipe below will not run from `main`. To use it: `git checkout parquet_dataloader`.
+> For the omni SFT + GRPO/TARPO path that runs on `main`, see [`OMNI_TRAINING.md`](OMNI_TRAINING.md).
+
 This branch (`parquet_dataloader`) adds a **model-agnostic, parquet-native** supervised
 fine-tuning (SFT) pipeline and a **GRPO example that runs on upstream
 [volcengine/verl](https://github.com/volcengine/verl) `@ main`** — no dependency on the

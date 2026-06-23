@@ -16,3 +16,20 @@ Pillow>=9.0.0
 sentence-transformers>=2.2.0  # reward_function.py cosine-similarity reward
 datasets>=2.18.0
 omegaconf>=2.3.0
+# Extra packages for the OMNI GRPO/TARPO path on the FORK verl (DDVD233/verl).
+# This path needs the fork (the ../verl submodule on this branch), NOT upstream verl.
+#
+#   conda create -n verl python==3.12.2 && conda activate verl
+#   # PyTorch (CUDA 12.6/12.8) per https://pytorch.org
+#   pip install -r ../verl/requirements.txt    # the DDVD233/verl fork (omni-capable)
+#   pip install "vllm[audio]==0.10.2"          # fork pairs with vLLM 0.10.2 (audio)
+#   pip install -r requirements_grpo.txt
+#   export PYTHONPATH="$(pwd)/../verl:$PYTHONPATH"
+#
+# (FlashAttention is best compiled from source; see the main ReadMe Training section.)
+qwen-vl-utils
+sentence-transformers>=2.2.0   # reward_function/human_behaviour*.py
+scikit-learn
+pandas
+tqdm
+wandb

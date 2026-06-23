@@ -1,0 +1,67 @@
+# Unified SFT config — AUDIO path (Gemma 4 E4B) on Human Behavior Atlas parquet.
+#
+# Gemma 4 E2B/E4B/12B natively handle text+image+AUDIO, so this variant trains on
+# HBA's audio bulk (cremad, etc.) WITHOUT the mirl fork — fully upstream.
+#
+# Requirements: transformers >= 5.x (for Gemma 4) and a recent processor.
+# This is the "omni/audio SFT" example; omni *GRPO* on upstream verl is not yet
+# viable (see README) — use the vision GRPO example for RL.
+
+data:
+  train_files: "/path/to/human_behavior_atlas_v2"
+  val_files: "/path/to/human_behavior_atlas_v2"
+
+model:
+  name: "google/gemma-4-E4B-it"
+  arch: "auto"                 # loads via AutoModelForImageTextToText
+  training_strategy: "lora"
+  torch_dtype: "bfloat16"
+  attn_implementation: "sdpa"
+  lora_config:
+    r: 32
+    alpha: 64
+    dropout: 0.05
+    target_modules: ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "down_proj", "up_proj"]
+
+train:
+  train_batch_size: 1
+  val_batch_size: 1
+  lr: 1e-4
+  epochs: 2
+  gradient_accumulation_steps: 16
+  num_workers: 0
+  save_checkpoint_dir: "./checkpoints/sft_gemma4_hba_audio"
+  load_checkpoint_path: null
+  save_every_n_epochs: 1
+  save_every_n_steps: null
+  validate_every_n_epochs: 1
+  validate_every_n_steps: null
+  use_scheduler: true
+  scheduler_type: "cosine"
+  warmup_steps: 10
+  max_grad_norm: 1.0
+  seed: 42
+
+dataset_config:
+  train_split: "train[:5%]"
+  val_split: "validation[:5%]"
+  prompt_key: "problem"
+  response_key: "answer"
+  image_key: "images"
+  video_key: "videos"
+  audio_key: "audios"
+  modality_signature_key: "modality_signature"
+  modalities: "audio"           # use HBA's audio rows
+  filter_by_modality: true
+  video_nframes: 8
+  max_prompt_length: 4096
+  max_response_length: 128
+  max_length: 4224
+  truncation: "right"
+  audio_max_seconds: 10
+  format_prompt: null
+
+wandb:
+  use: false
+  project: "sft-gemma4-hba-audio"
+  entity: null

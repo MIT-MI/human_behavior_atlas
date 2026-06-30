@@ -121,6 +121,8 @@ OmniSapiens-7B 2.0 is a significantly improved foundation model, trained with a 
 
 ## ⚙️ Training
 
+> ⚡ **Quickstart:** see **[`docs/SETUP.md`](docs/SETUP.md)** for the simple linear setup (clone → **patch verl** (`bash scripts/setup_verl.sh`) → env → data → train). The detailed reference is below.
+>
 > **`parquet_dataloader` branch:** this branch also provides a lighter, **upstream-verl** training path — a parquet-native, model-agnostic **SFT + GRPO** pipeline under [`training/sft/`](training/sft/) and [`training/rl/`](training/rl/), documented in **[`docs/PARQUET_TRAINING.md`](docs/PARQUET_TRAINING.md)**. The instructions below describe the original fork-based (`v0.5.0.dev`) setup.
 
 ### Installation

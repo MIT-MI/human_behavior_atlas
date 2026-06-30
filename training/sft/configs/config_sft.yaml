@@ -41,9 +41,9 @@ train:
   seed: 42
 
 dataset_config:
-  # SFT uses first 10% of train; GRPO/TARPO use the rest.
-  train_split: "train[:10%]"
-  val_split: "validation[:10%]"
+  # Train on the full HBA train/validation splits.
+  train_split: "train"
+  val_split: "validation"
   prompt_key: "problem"
   response_key: "answer"
   image_key: "images"

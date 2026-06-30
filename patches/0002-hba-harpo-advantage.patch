@@ -1,0 +1,664 @@
+diff --git a/verl/trainer/ppo/core_algos.py b/verl/trainer/ppo/core_algos.py
+index 6c5c9663..a38fea6e 100644
+--- a/verl/trainer/ppo/core_algos.py
++++ b/verl/trainer/ppo/core_algos.py
+@@ -1565,3 +1565,592 @@ def compute_pf_ppo_reweight_data(
+ 
+     return resampled_data
+ 
++
++
++# ============================================================================
++# HARPO advantage (Heterogeneity-Aware Relative Policy Optimization)
++# Ported into the public release so `adv_estimator=harpo` is runnable.
++# ============================================================================
++from .harpo_utils import (
++    task_stats,
++    dataset_stats,
++    _ema_update,                    # only used inside CVaR buffer EMA
++    build_mappings,
++    update_raw_stats,    # U1
++    update_k_stats_from_q2k,        # U2
++    update_advantage_stats,
++    store_advantage_data,
++    get_latest_advantage_data,
++    save_advantages_to_json
++)
++
++@register_adv_est(AdvantageEstimator.HARPO)
++def compute_harpo_outcome_advantage(
++    token_level_rewards: torch.Tensor,   # (B, L), where L is the response_length
++    response_mask:      torch.Tensor,    # (B, L)
++    index:              torch.Tensor,    # (B,) question /prompt ids (unused except parity with others)
++    task_ids:           List[Any],       # (B,) task id per sample
++    dataset_ids:        List[Any],       # (B,) dataset id per sample
++    class_labels:       List[Any],       # (B,) class label per sample (for weighting)
++    *,
++    # --- Ablation toggles ---
++    use_task_adapter:   bool = False,
++    use_task_mixture_adapter: bool = False, 
++    use_class_weights:  bool = False,
++    use_cvar_boost:     bool = False,
++    use_grpo_group_norm: bool = True,
++    use_task_mixture_density_adapter: bool = True,
++    # --- Hyperparameters ---
++    eps: float = EPS_DEFAULT,
++    alpha: float = 0.2,                  # CVaR tail fraction
++    lambda_risk: float = 0.3,            # blend strength for dynamic tail boost
++    # EMA decays
++    beta_mu: float = 0.99,
++    beta_sigma: float = 0.99,
++    beta_mean: float = 0.98,    # per task buffer EMA for CVaR's mean references (how much of the prev to keep etc.)
++    beta_cvar: float = 0.98,    # per task buffer EMA for CVaR
++    beta_tail: float = 1.0,     # how strongly the frequency of tail events modulates CVaR boost
++    # Static metadata for class weights
++    class_count_info: Optional[Dict[Any, Dict[Any, int]]] = None,  # {dataset: {class: count}}
++    class_weight_scope: str = "auto",
++) -> Tuple[torch.Tensor, torch.Tensor]:
++    """
++    HARPO advantage/return computation (no per-prompt batch norm).
++    Pipeline (modular; combine once at the end):
++        A) Build q2rollouts/q2tasks/q2datasets/q2class and per-task/dataset stats
++        B) (Optional) Global min-max scaling across all rollouts
++        C) (Optional) GRPO-style intra-question normalization (zero-mean/unit-variance per qid)
++        D) Task-adapter centering -> q2norm[qid][k]
++        E) Static inverse-frequency class weight -> q2w[qid] (scalar)
++        F) CVaR dynamic tail boost -> q2k[qid] (via per-task buffer)
++        G) Combine into final scalar advantages, log stats, and broadcast
++    """
++
++    device = token_level_rewards.device
++    B, L   = token_level_rewards.shape
++
++    # 1) Rollout-level scalar raw rewards
++    # Token_level rewards is essentially the rewards for each token in the response
++    # here, we sum them to get the total reward for the entire response
++    raw_scores = token_level_rewards.sum(dim=-1)  # (B,)
++
++    # So, essentially, we assume that the scores 
++    # correspond to the batch samples in order (B,), where B is 
++    # the total number of rollouts in the mini-batch, (i.e. 5 for the same question)
++    # if there is 2 questions, then B = 10 (5 rollouts each)
++    # and this is the same order as task_ids, dataset_ids, class_labels,
++    # qid is basically the question id that each rollout corresponds to
++    # i.e. index = [qid_1, qid_1, qid_1] (for a rollout of 3)
++    # note that there may be more than one question in the mini-batch
++    # which looks like [qid_1, qid_1, qid_1, qid_2, qid_2, qid_2] 
++    # (for 2 questions, each with 3 rollouts)
++    # we use qid to essentially delineate the different training examples
++    use_minmax_scaling: bool = True,    # Global min-max scaling before GRPO
++    (
++        q2rollouts,
++        q2tasks,
++        q2datasets,
++        q2class,
++        task_to_rollouts,
++        dataset_to_rollouts,
++    ) = build_mappings(
++        raw_scores=raw_scores,
++        index=index,
++        task_ids=task_ids,
++        dataset_ids=dataset_ids,
++        class_labels=class_labels,
++        use_minmax_scaling=use_minmax_scaling,
++        eps=eps,
++    )
++
++    # NOTE: the returns at the end of this function are essentially the 
++    # normalized values of the scores, which are then broadcasted to token-level
++    # i.e. for each token in the response, it will now have the same normalized 
++    # score as the entire response
++    # [1.2], [0.5] --> [1.2, 1.2, 1.2], [0.5, 0.5, 0.5] (for response length of 3 for both responses)
++
++    # -------------------------------------------------------------------------
++    # U1) Update per-task and per-dataset stats
++    #     - raw_batch_mu/raw_batch_sigma/raw_batch_count: non-EMA, for logging
++    #     - ema_mu/ema_sigma/ema_count: EMA (used by task adapter)
++    #
++    # Note: These stats are updated AFTER optional min-max scaling (which
++    # happens in build_mappings), so if use_minmax_scaling=True, these stats
++    # reflect the scaled values.
++    # -------------------------------------------------------------------------
++    update_raw_stats(
++        task_to_rollouts=task_to_rollouts,
++        dataset_to_rollouts=dataset_to_rollouts,
++        beta_mu=beta_mu,
++        beta_sigma=beta_sigma,
++        eps=eps,
++    )
++
++    # -------------------------------------------------------------------------
++    # C) GRPO-style intra-question normalization (zero-mean/unit-variance)
++    #
++    # This step operates on q2rollouts (per-qid rollout lists) and is applied
++    # AFTER optional min-max scaling (in build_mappings) and BEFORE task
++    # adapter, class weighting, and CVaR scaling so that those subsequent
++    # scalings are not neutralized.
++    #
++    # Standard GRPO normalization: (v - mean) / std per question
++    # -------------------------------------------------------------------------
++    if use_grpo_group_norm:
++        for qid, vals in q2rollouts.items():
++            if len(vals) < 2:
++                # With a single rollout, GRPO normalization is ill-defined; keep as is.
++                continue
++
++            # Original GRPO-style group normalization: (v - mean) / std
++            mu = float(np.mean(vals))
++            sd = float(np.std(vals, ddof=0))
++            sd = max(sd, eps)
++            q2rollouts[qid] = [(v - mu) / sd for v in vals]
++
++        # ---------------------------------------------------------------------
++        # U2.5) Track POST-GRPO advantages per task and per dataset
++        #       (after GRPO group normalization, before task adapter)
++        # ---------------------------------------------------------------------
++        update_advantage_stats(
++            q2_advantages=q2rollouts,
++            q2tasks=q2tasks,
++            q2datasets=q2datasets,
++            stat_prefix="post_grpo_advantage",
++            beta_mu=beta_mu,
++            beta_sigma=beta_sigma,
++            eps=eps,
++        )
++
++        # Store post-GRPO advantages for saving to JSON
++        # Note: responsibilities (q2rvalues) are not yet computed at this stage
++        store_advantage_data(
++            advantage_type="post_grpo",
++            q2_advantages=q2rollouts,
++            q2tasks=q2tasks,
++            q2datasets=q2datasets,
++            q2_responsibilities={}
++        )
++
++    # -------------------------------------------------------------------------
++    # D.5) Task mixture-density adapter
++    #
++    # Features:
++    #  1) Rarity boosting is toggleable
++    #  2) Inter-task responsibilities use unit-advantage normalization (no z-scores)
++    #  3) Optional hierarchical rollout-mixture within each task (two-sided,
++    #     budget-preserving via log re-centering)
++    # -------------------------------------------------------------------------
++
++    # Initialize responsibilities dict (will be populated if mixture adapter is enabled)
++    q2rvalues: Dict[Any, List[float]] = {}
++
++    if use_task_mixture_density_adapter:
++
++        # ----------------------------
++        # Toggles
++        # ----------------------------
++        USE_RARITY_BOOST         = False
++        USE_HIER_ROLLOUT_MIXTURE = True
++        NORMALIZATION_MODE       = "no_responsibilities"  # "z_score", "global_norm", "absolute", or "no_responsibilities"
++        SCALING_TYPE             = "geom"  # "geom" (geometric mean redistribution), "arith" (arithmetic mean redistribution), or "naive_density" (direct division by rho_t)
++        RHO_METHOD               = "normalized"  # "normalized" (mass / count) or "unnormalized" (raw mass)
++
++        # ----------------------------
++        # Hyperparameters
++        # ----------------------------
++        # Responsibility computation
++        BETA_R   = 4.0
++        DELTA_Z  = 0.25   # threshold in z space (e.g., 0.25 ~ mildly above typical) - only used for z_score mode
++        A_THRESHOLD = 0.5  # threshold in absolute advantage space - only used for absolute mode
++
++        # Inter-task density scaling
++        GAMMA = 1
++
++        # Rarity boost (optional)
++        ETA_K      = 0.5
++        K_MAX      = 1.5
++        RARE_RATIO = 2.5
++
++        # Hierarchical rollout mixture
++        ALPHA_ROLL     = 1.0
++        HIER_MIN_SCALE = 0.5
++        HIER_MAX_SCALE = 3.0
++
++        # EMA smoothing
++        BETA_RHO     = 0.95 # NOTE: ORIGINAL VALUE IS 0.95 ; we can put as 0 for no EMA smoothing
++        BETA_LOGMULT = 0.95
++
++        # Final task-scale clamp
++        MIN_SCALE = 0.5
++        MAX_SCALE = 4.0
++
++        # ----------------------------
++        # Step 1 — responsibilities + task signal mass
++        # ----------------------------
++        task_signal_mass = defaultdict(float)
++        task_sig_count   = defaultdict(float)
++        task_count       = defaultdict(int)
++
++        # Compute global mean absolute advantage if using global normalization
++        global_mean_abs = None
++        if NORMALIZATION_MODE == "global_norm":
++            all_abs_vals = []
++            for vals in q2rollouts.values():
++                all_abs_vals.extend([abs(v) for v in vals])
++            global_mean_abs = sum(all_abs_vals) / max(len(all_abs_vals), 1) if all_abs_vals else eps
++            global_mean_abs = max(global_mean_abs, eps)
++
++        for qid, vals in q2rollouts.items():
++            task = q2tasks[qid]
++            r_list = []
++
++            if NORMALIZATION_MODE == "global_norm":
++                # Global normalization: normalize by global mean |A|
++                for v in vals:
++                    a = abs(v)
++                    # Normalize by global mean
++                    norm_a = a / global_mean_abs
++                    # Responsibility based on normalized advantage
++                    # Use norm_a - 1.0 as input to sigmoid (values > mean have norm_a > 1)
++                    r = 1.0 / (1.0 + math.exp(-BETA_R * (norm_a - 1.0)))
++
++                    task_signal_mass[task] += r * a
++                    task_sig_count[task]   += r
++                    task_count[task]       += 1
++                    r_list.append(r)
++            elif NORMALIZATION_MODE == "z_score":
++                # Z-score normalization: task-specific normalization
++                # Fetch per-task EMA stats in |A| space
++                mu_abs = float(task_stats[task].get("post_grpo_advantage_ema_abs_mean", 0.0))
++                mu_abs = max(mu_abs, eps)
++
++                # Prefer abs-sigma if tracked; otherwise fall back to signed sigma
++                sd_abs = float(task_stats[task].get("post_grpo_advantage_ema_abs_sigma", 0.0))
++                if sd_abs <= 0.0:
++                    sd_abs = float(task_stats[task].get("post_grpo_advantage_ema_sigma", 0.0))
++                sd_abs = max(sd_abs, eps)
++
++                for v in vals:
++                    a = abs(v)
++
++                    # standard z-score in |A| space
++                    z = (a - mu_abs) / (sd_abs + eps)
++
++                    # responsibility as soft tail membership
++                    r = 1.0 / (1.0 + math.exp(-BETA_R * (z - DELTA_Z)))
++
++                    task_signal_mass[task] += r * a
++                    task_sig_count[task]   += r
++                    task_count[task]       += 1
++                    r_list.append(r)
++            elif NORMALIZATION_MODE == "absolute":
++                # Absolute mode: sigmoid applied directly to absolute advantage with threshold
++                for v in vals:
++                    a = abs(v)
++
++                    # Responsibility based on raw absolute advantage with threshold
++                    r = 1.0 / (1.0 + math.exp(-BETA_R * (a - A_THRESHOLD)))
++
++                    task_signal_mass[task] += r * a
++                    task_sig_count[task]   += r
++                    task_count[task]       += 1
++                    r_list.append(r)
++
++            elif NORMALIZATION_MODE == "no_responsibilities":
++                # No responsibilities ablation: all responsibilities set to 1.0
++                # This removes responsibility weighting and uses raw absolute advantage statistics
++                # so that we can test the effectiveness of the responsibilities
++                for v in vals:
++                    a = abs(v)
++
++                    # Responsibility is always 1.0 (no weighting)
++                    r = 1.0
++
++                    task_signal_mass[task] += r * a  # Equivalent to: task_signal_mass[task] += a
++                    task_sig_count[task]   += r      # Equivalent to: task_sig_count[task] += 1
++                    task_count[task]       += 1
++                    r_list.append(r)
++            else:
++                raise ValueError(f"Unknown NORMALIZATION_MODE: {NORMALIZATION_MODE}. Must be 'z_score', 'global_norm', 'absolute', or 'no_responsibilities'")
++
++            q2rvalues[qid] = r_list
++
++        # Store batch-level signal statistics for logging
++        for task in task_signal_mass:
++            task_stats[task]["mixture_signal_mass"]       = float(task_signal_mass[task])
++            task_stats[task]["mixture_sig_count_batch"]   = float(task_sig_count[task])
++            task_stats[task]["mixture_batch_count"]       = int(task_count[task])
++
++        if len(task_signal_mass) == 0:
++            q2norm = {qid: list(vals) for qid, vals in q2rollouts.items()}
++        else:
++            # ----------------------------
++            # Step 2 — task densities rho_t (EMA)
++            # ----------------------------
++            task_densities = {}
++            log_rhos = []
++
++
++            # derivation of rhos
++            for task, mass in task_signal_mass.items():
++                count = max(task_count[task], 1)
++                if RHO_METHOD == "normalized":
++                    rho_batch = max(mass / count, eps)
++                elif RHO_METHOD == "unnormalized":
++                    rho_batch = max(mass, eps)
++                else:
++                    raise ValueError(f"Unknown RHO_METHOD: {RHO_METHOD}. Must be 'normalized' or 'unnormalized'")
++
++                prev_rho = float(task_stats[task].get("mixture_rho_t_ema", rho_batch))
++                rho_ema  = _ema_update(prev_rho, rho_batch, BETA_RHO)
++                rho_ema  = max(rho_ema, eps)
++
++                task_stats[task]["mixture_rho_t_batch"] = float(rho_batch)
++                task_stats[task]["mixture_rho_t_ema"]   = float(rho_ema)
++
++                task_densities[task] = rho_ema
++
++                # obtaining the log rhos for geometric mean
++                log_rhos.append(math.log(rho_ema))
++
++            # geometric mean of task densities
++            log_rho_ref = sum(log_rhos) / len(log_rhos)
++            rho_ref_geom = math.exp(log_rho_ref)
++
++            # arithmetic mean of task densities; obtained from rho_ema
++            rho_ref_arith = sum(task_densities.values()) / len(task_densities)
++
++            for task in task_signal_mass:
++                task_stats[task]["mixture_rho_ref"] = float(rho_ref_geom)
++
++            # ----------------------------
++            # Step 3 — rarity boost (optional)
++            # ----------------------------
++            task_k = defaultdict(lambda: 1.0)
++
++            if USE_RARITY_BOOST:
++                for task in task_signal_mass:
++                    sig_batch = max(task_sig_count[task], eps)
++                    prev = float(task_stats[task].get("mixture_sig_count_ema", sig_batch))
++                    sig_ema = _ema_update(prev, sig_batch, BETA_RHO)
++                    task_stats[task]["mixture_sig_count_ema"] = float(sig_ema)
++                    task_stats[task]["mixture_sig_count"]     = float(sig_batch)
++
++                sig_emas = [
++                    max(float(task_stats[t]["mixture_sig_count_ema"]), eps)
++                    for t in task_signal_mass
++                ]
++                sig_ref = math.exp(sum(math.log(x) for x in sig_emas) / len(sig_emas))
++
++                for task in task_signal_mass:
++                    n_sig = max(task_stats[task]["mixture_sig_count_ema"], eps)
++                    ratio = sig_ref / n_sig
++                    excess = max(0.0, ratio - RARE_RATIO)
++
++                    log_k = ETA_K * math.log1p(excess)
++                    log_k = min(log_k, math.log(K_MAX))
++                    task_k[task] = math.exp(log_k)
++
++                    task_stats[task]["mixture_sig_ref"]          = float(sig_ref)
++                    task_stats[task]["mixture_log_rarity_raw"]   = float(math.log(ratio))
++                    task_stats[task]["mixture_log_rarity_pos"]   = float(excess)
++                    task_stats[task]["mixture_rarity_ratio"]     = float(ratio)
++                    task_stats[task]["mixture_rarity_excess"]    = float(excess)
++                    task_stats[task]["mixture_k_t"]              = float(task_k[task])
++            else:
++                for task in task_signal_mass:
++                    task_stats[task]["mixture_sig_count"]        = 0.0
++                    task_stats[task]["mixture_sig_ref"]          = 0.0
++                    task_stats[task]["mixture_log_rarity_raw"]   = 0.0
++                    task_stats[task]["mixture_log_rarity_pos"]   = 0.0
++                    task_stats[task]["mixture_rarity_ratio"]     = 0.0
++                    task_stats[task]["mixture_rarity_excess"]    = 0.0
++                    task_stats[task]["mixture_k_t"]              = 1.0
++
++            # ----------------------------
++            # Step 4 — task-scale s_t (EMA)
++            # ----------------------------
++            task_scale = {}
++
++            for task in task_signal_mass:
++                rho_t = max(task_densities[task], eps)
++                
++                if SCALING_TYPE == "geom":
++                    # Original: geometric mean redistribution with EMA smoothing
++                    log_ratio = log_rho_ref - math.log(rho_t)
++                    log_mult_inst = GAMMA * log_ratio + math.log(task_k[task])
++
++                    prev = float(task_stats[task].get("mixture_log_mult_ema_scale", 0.0))
++                    log_mult_ema = _ema_update(prev, log_mult_inst, BETA_LOGMULT)
++
++                    scale = math.exp(log_mult_ema)
++                    scale = max(MIN_SCALE, min(MAX_SCALE, scale))
++
++                elif SCALING_TYPE == "arith":
++                    # Arithmetic mean redistribution with EMA smoothing
++                    mult_inst = (rho_ref_arith / rho_t) * task_k[task]
++
++                    prev_scale = float(task_stats[task].get("mixture_final_scale", mult_inst))
++                    scale = _ema_update(prev_scale, mult_inst, BETA_LOGMULT)
++                    scale = max(MIN_SCALE, min(MAX_SCALE, scale))
++
++                    # SOLELY FOR LOGGING PURPOSES: THESE ARE NOT USED FOR SCALING
++                    log_ratio = math.log(rho_ref_arith) - math.log(rho_t)
++                    log_mult_inst = math.log(mult_inst)
++                    log_mult_ema = math.log(scale)
++
++                elif SCALING_TYPE == "naive_density":
++                    # SOLELY FOR LOGGING PURPOSES: THESE ARE NOT USED FOR SCALING
++                    log_ratio = 0.0
++                    log_mult_inst = -math.log(rho_t)
++                    log_mult_ema = log_mult_inst  # No EMA smoothing
++                    
++                    # Naive ablation: directly use 1/density (no EMA, no redistribution, no rarity boost)
++                    scale = 1.0 / rho_t
++                    scale = max(MIN_SCALE, min(MAX_SCALE, scale))
++                else:
++                    raise ValueError(f"Unknown SCALING_TYPE: {SCALING_TYPE}. Must be 'geom', 'arith', or 'naive_density'")
++
++                task_scale[task] = scale
++
++                task_stats[task]["mixture_log_ratio_scale"]      = float(log_ratio)
++                task_stats[task]["mixture_log_mult_inst_scale"]  = float(log_mult_inst)
++                task_stats[task]["mixture_log_mult_ema_scale"]   = float(log_mult_ema)
++                task_stats[task]["mixture_final_scale"]          = float(scale)
++
++            # ----------------------------
++            # Step 5 — hierarchical rollout-mixture (two-sided, budget-preserving)
++            # ----------------------------
++            qid_rollout_scale = defaultdict(lambda: 1.0)
++
++            if USE_HIER_ROLLOUT_MIXTURE:
++                task2qids = defaultdict(list)
++                for qid in q2rollouts:
++                    task2qids[q2tasks[qid]].append(qid)
++
++                for task, qids in task2qids.items():
++                    if len(qids) < 2:
++                        continue
++
++                    qid2m = {}
++
++                    # computing the per rollout m, which is essentially the density of the signal mass
++                    for qid in qids:
++                        vals = q2rollouts[qid]
++                        rs   = q2rvalues[qid]
++                        m = sum(r * abs(v) for r, v in zip(rs, vals)) / max(len(vals), 1)
++                        m = max(m, eps)
++                        qid2m[qid] = m
++
++                    if SCALING_TYPE == "geom":
++                        # Geometric mean redistribution (log space)
++                        log_m = [math.log(m) for m in qid2m.values()]
++
++                        # reference geometric mean
++                        log_mbar = sum(log_m) / len(log_m)
++
++                        for qid in qids:
++                            log_s = log_mbar - math.log(qid2m[qid])
++                            s = ALPHA_ROLL * math.exp(log_s)
++                            if HIER_MAX_SCALE is not None:
++                                s = max(HIER_MIN_SCALE, min(HIER_MAX_SCALE, s))
++                            qid_rollout_scale[qid] = s
++
++                    elif SCALING_TYPE == "arith":
++                        # Arithmetic mean redistribution (linear space)
++                        mbar = sum(qid2m.values()) / len(qid2m)
++                        for qid in qids:
++                            ratio = mbar / qid2m[qid]
++                            s =  ALPHA_ROLL * ratio
++                            if HIER_MAX_SCALE is not None:
++                                s = max(HIER_MIN_SCALE, min(HIER_MAX_SCALE, s))
++                            qid_rollout_scale[qid] = s
++
++                    elif SCALING_TYPE == "naive_density":
++                        # Naive density: direct 1/m scaling
++                        for qid in qids:
++                            ratio = 1.0 / qid2m[qid]
++                            s = ALPHA_ROLL * ratio
++                            if HIER_MAX_SCALE is not None:
++                                s = max(HIER_MIN_SCALE, min(HIER_MAX_SCALE, s))
++                            qid_rollout_scale[qid] = s
++
++            # ----------------------------
++            # Step 6 — apply final scaling
++            # ----------------------------
++            q2norm = {}
++            for qid, vals in q2rollouts.items():
++                task = q2tasks[qid]
++                s_t  = task_scale.get(task, 1.0)
++                s_q  = qid_rollout_scale.get(qid, 1.0)
++                q2norm[qid] = [v * s_t * s_q for v in vals]
++
++    else:
++        q2norm = {qid: list(vals) for qid, vals in q2rollouts.items()}
++
++
++    # --------------------------------------------
++    # G) Combine once at the end, with ablations baked in:
++    #    Let base = (norm_or_raw) * (weight_or_1)
++    #    Effective lambda: λ_eff = λ_risk if CVaR enabled else 0
++    #    Effective k:      k_eff = k_t     if CVaR enabled else 1
++    #
++    #    score = (1 - λ_eff) * base + λ_eff * (k_eff * base)
++    # --------------------------------------------
++
++    q2_final: Dict[str, List[float]] = defaultdict(list)
++    qrolloutpos: Dict[Any, int] = defaultdict(int)  # store the positions of the rollouts that we are at
++
++    for i in range(B):
++        qid = index[i]
++        j   = qrolloutpos[qid]
++
++        # 1) Norm or raw (already prepared upstream)
++        norm_or_raw = q2norm[qid][j]
++
++        s_final = norm_or_raw
++
++        q2_final[qid].append(float(s_final))
++        qrolloutpos[qid] += 1
++
++    # --------------------------------------------
++    # G) Rebuild tensor in original rollout order
++    # --------------------------------------------
++    final_scores = torch.empty_like(raw_scores)
++    qfinalrolloutpos: Dict[Any, int] = defaultdict(int)
++
++    for i in range(B):
++        qid = index[i]
++        j   = qfinalrolloutpos[qid]
++        final_scores[i] = torch.tensor(q2_final[qid][j], device=device, dtype=raw_scores.dtype)
++        qfinalrolloutpos[qid] += 1
++
++    # --------------------------------------------
++    # U3) Update FINAL HARPO advantages per task and per dataset
++    # --------------------------------------------
++    update_advantage_stats(
++        q2_advantages=q2_final,
++        q2tasks=q2tasks,
++        q2datasets=q2datasets,
++        stat_prefix="final_advantage",
++        beta_mu=beta_mu,
++        beta_sigma=beta_sigma,
++        eps=eps,
++    )
++
++    # Store final advantages and responsibilities for saving to JSON
++    store_advantage_data(
++        advantage_type="final",
++        q2_advantages=q2_final,
++        q2tasks=q2tasks,
++        q2datasets=q2datasets,
++        q2_responsibilities=q2rvalues
++    )
++
++    # --------------------------------------------
++    # H) Broadcast to token level and return
++    # --------------------------------------------
++    returns = final_scores.unsqueeze(-1) * response_mask
++
++    return returns, returns
+diff --git a/verl/trainer/ppo/ray_trainer.py b/verl/trainer/ppo/ray_trainer.py
+index 6ba431ff..2524728d 100644
+--- a/verl/trainer/ppo/ray_trainer.py
++++ b/verl/trainer/ppo/ray_trainer.py
+@@ -323,39 +323,31 @@ def compute_advantage(
+         data.batch["advantages"] = advantages
+         data.batch["returns"] = returns
+ 
+-    # NOTE: HARPO Implementation will be added upon the acceptance and cleanup of the subsequent paper: 
+-    # OmniSapiens: A Foundation Model for Social Behavior Processing via Heterogeneity-Aware Relative Policy Optimization
++    # HARPO (Heterogeneity-Aware Relative Policy Optimization) — OmniSapiens 2.0.
++    # Heterogeneity-aware, outcome-based advantage; see core_algos.compute_harpo_outcome_advantage.
+     elif adv_estimator == AdvantageEstimator.HARPO:
++        grpo_calculation_mask = data.batch["response_mask"]
+ 
+-        pass
+-
+-        # grpo_calculation_mask = data.batch["response_mask"]
+-
+-        # # info, taken from the non_tensor batch,
+-        # # this is usually a string identifier for the task, 
+-        # # for task_ids, dataset_ids, class_labels
+-        # advantages, returns = core_algos.compute_harpo_outcome_advantage(
+-        #     token_level_rewards=data.batch["token_level_rewards"],
+-        #     response_mask=grpo_calculation_mask,
+-        #     index=data.non_tensor_batch["uid"],
+-        #     task_ids=data.non_tensor_batch.get("task", None),
+-        #     dataset_ids = data.non_tensor_batch.get("dataset", None),
+-        #     class_labels=data.non_tensor_batch.get("class_label", None),
+-        
+-        #     # EMA decays
+-        #     beta_mu = 0.95,
+-        #     beta_sigma = 0.95,
+-        #     beta_mean = 0.95,
+-        #     beta_cvar = 0.95,
+-        #     beta_tail = 1.0,
+-
+-        #     # Static metadata for class weights
+-        #     class_count_info = None, 
+-        #     class_weight_scope = "auto"
+-
+-        # )
+-        # data.batch["advantages"] = advantages
+-        # data.batch["returns"] = returns
++        # Task / dataset / class identifiers come from the non-tensor batch (string ids).
++        advantages, returns = core_algos.compute_harpo_outcome_advantage(
++            token_level_rewards=data.batch["token_level_rewards"],
++            response_mask=grpo_calculation_mask,
++            index=data.non_tensor_batch["uid"],
++            task_ids=data.non_tensor_batch.get("task", None),
++            dataset_ids=data.non_tensor_batch.get("dataset", None),
++            class_labels=data.non_tensor_batch.get("class_label", None),
++            # EMA decays
++            beta_mu=0.95,
++            beta_sigma=0.95,
++            beta_mean=0.95,
++            beta_cvar=0.95,
++            beta_tail=1.0,
++            # Static metadata for class weights
++            class_count_info=None,
++            class_weight_scope="auto",
++        )
++        data.batch["advantages"] = advantages
++        data.batch["returns"] = returns
+ 
+     else:
+         # handle all other adv estimator type other than GAE and GRPO

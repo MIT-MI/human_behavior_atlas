@@ -1,17 +1,12 @@
 #!/bin/bash
-# GRPO for Qwen2.5-Omni-7B on Human Behavior Atlas — FORK path (DDVD233/verl).
+# HARPO for Qwen2.5-Omni-7B on Human Behavior Atlas — FORK path (DDVD233/verl).
 #
-# This is the omni counterpart to the upstream-verl GRPO on the parquet_dataloader
-# branch. It runs on the fork's verl (the `verl/` submodule on this branch) and uses
-# the fork-only multimodal keys (data.modalities + train/val_modality_batching), so it
-# reads the HBA parquet DIRECTLY — no parquet conversion needed.
+# HARPO is a fork-only advantage estimator that adds task-level adaptation over GRPO:
+#   task-level normalization + mixture adapters, CVaR tail boosting for imbalanced
+#   tasks, class-based weighting, and per-task EMA buffers. It is NOT available in
+#   upstream verl — this recipe requires the fork (the verl/ submodule on this branch).
 #
-# Prerequisites:
-#   - Fork verl env (see OMNI_TRAINING.md): conda env `verl`, vLLM[audio]==0.10.2,
-#     and PYTHONPATH including the verl/ submodule.
-#   - An SFT checkpoint merged into the full Omni model (auto-merged below if missing).
-#
-# Usage:   ./run_grpo.sh [NUM_GPUS]      (default 4)
+# Usage:   ./run_harpo.sh [NUM_GPUS]     (default 4)
 # Env:     HBA_DATA_DIR, MODEL_PATH, SAVE_DIR
 set -x
 
@@ -25,43 +20,45 @@ export RAY_memory_usage_threshold=0.98
 export RAY_NUM_CPUS_PER_TASK=4
 
 GRPO_DIR="$(cd "$(dirname "$0")" && pwd)"
-HBA_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+HBA_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 export PYTHONPATH="${HBA_ROOT}/verl:${PYTHONPATH}"
 cd "$HBA_ROOT"
 
-MODEL_PATH=${MODEL_PATH:-"${HBA_ROOT}/sft/checkpoints/sft_qwen_omni_hba_merged"}
+MODEL_PATH=${MODEL_PATH:-"${HBA_ROOT}/training/sft/checkpoints/sft_qwen_omni_hba_merged"}
 
-# Auto-merge latest SFT checkpoint into the full Omni model if not present.
 if [ ! -f "$MODEL_PATH/config.json" ]; then
-    SFT_CKPT_DIR="${HBA_ROOT}/sft/checkpoints/sft_qwen_omni_hba"
+    SFT_CKPT_DIR="${HBA_ROOT}/training/sft/checkpoints/sft_qwen_omni_hba"
     LATEST_CKPT=$(ls -d ${SFT_CKPT_DIR}/step_* 2>/dev/null | sed 's/.*step_//' | sort -n | tail -1 | xargs -I{} echo "${SFT_CKPT_DIR}/step_{}")
     if [ -z "$LATEST_CKPT" ]; then
-        echo "ERROR: No SFT checkpoint in ${SFT_CKPT_DIR}. Run sft/run_sft.sh first."
+        echo "ERROR: No SFT checkpoint in ${SFT_CKPT_DIR}. Run training/sft/run_sft.sh first."
         exit 1
     fi
     echo "[INFO] Auto-merging SFT checkpoint: $LATEST_CKPT -> $MODEL_PATH"
-    python3 "${HBA_ROOT}/sft/merge_lora.py" --arch omni_thinker \
+    python3 "${HBA_ROOT}/training/sft/merge_lora.py" --arch omni_thinker \
         --base_model "Qwen/Qwen2.5-Omni-7B" \
         --adapter_path "$LATEST_CKPT" --output_path "$MODEL_PATH" || { echo "merge failed"; exit 1; }
 fi
 
-# Data: GRPO uses train[~10%:] (no overlap with SFT's first 10%).
 DATA_DIR=${HBA_DATA_DIR:-"/path/to/human_behavior_atlas_v2"}
 TRAIN_FILE_LIST="["
-for f in ${DATA_DIR}/train-{00032..00292}-of-00293.parquet; do
+for f in ${DATA_DIR}/train-*-of-*.parquet; do
     [ -f "$f" ] && TRAIN_FILE_LIST="${TRAIN_FILE_LIST}${f},"
 done
 TRAIN_FILE_LIST="${TRAIN_FILE_LIST%,}]"
-VAL_FILE="${DATA_DIR}/validation-00004-of-00013.parquet"
+VAL_FILE_LIST="["
+for f in ${DATA_DIR}/validation-*-of-*.parquet; do
+    [ -f "$f" ] && VAL_FILE_LIST="${VAL_FILE_LIST}${f},"
+done
+VAL_FILE_LIST="${VAL_FILE_LIST%,}]"
 
-SAVE_DIR=${SAVE_DIR:-"${HBA_ROOT}/grpo/checkpoints/grpo_qwen_omni_hba"}
-REWARD_FN="${GRPO_DIR}/reward_function/human_behaviour.py"
+SAVE_DIR=${SAVE_DIR:-"${HBA_ROOT}/training/rl/checkpoints/harpo_qwen_omni_hba"}
+REWARD_FN="${GRPO_DIR}/reward_function/human_behaviour_harpo.py"
 FORMAT_PROMPT="${GRPO_DIR}/format_prompt/default.jinja"
 
 python3 -m verl.trainer.main_ppo \
-    algorithm.adv_estimator=grpo \
+    algorithm.adv_estimator=harpo \
     data.train_files="$TRAIN_FILE_LIST" \
-    data.val_files="$VAL_FILE" \
+    data.val_files="$VAL_FILE_LIST" \
     data.train_batch_size=32 \
     data.val_batch_size=8 \
     data.max_prompt_length=3072 \
@@ -101,6 +98,7 @@ python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.rollout.n=5 \
     actor_rollout_ref.rollout.max_model_len=5120 \
     actor_rollout_ref.rollout.max_num_batched_tokens=5120 \
+    actor_rollout_ref.rollout.max_num_seqs=2 \
     actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=1 \
     actor_rollout_ref.ref.fsdp_config.param_offload=True \
     algorithm.use_kl_in_reward=False \
@@ -109,8 +107,8 @@ python3 -m verl.trainer.main_ppo \
     reward_model.reward_manager=batch \
     trainer.critic_warmup=0 \
     trainer.logger='["console","wandb"]' \
-    trainer.project_name='grpo-qwen-omni-hba' \
-    trainer.experiment_name='grpo_sft_init' \
+    trainer.project_name='harpo-qwen-omni-hba' \
+    trainer.experiment_name='harpo_sft_init' \
     trainer.n_gpus_per_node="$NUM_GPUS" \
     trainer.nnodes=1 \
     trainer.save_freq=500 \
@@ -118,6 +116,8 @@ python3 -m verl.trainer.main_ppo \
     trainer.test_freq=99999 \
     trainer.total_epochs=5 \
     trainer.default_local_dir="$SAVE_DIR" \
+    trainer.advantage_save_dir="$SAVE_DIR/advantages" \
+    trainer.advantage_plot_freq=15 \
     trainer.resume_mode=auto
 
-echo "GRPO training completed!"
+echo "HARPO training completed!"

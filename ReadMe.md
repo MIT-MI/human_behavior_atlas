@@ -8,8 +8,10 @@ OmniSapiens 2.0 is a first-of-its-kind foundation model for unified social behav
 
 Together, we hope that HBA and OmniSapiens 2.0 provide a unified ecosystem for advancing socially intelligent AI systems capable of interpretable and robust human behavior understanding.
 
-> 🧩 **`parquet_dataloader` branch:** adds a model-agnostic, **parquet-native SFT + GRPO** pipeline that runs on **upstream [verl](https://github.com/volcengine/verl) `@ main`** — the `verl/` submodule is repointed from the fork, with no `mirl` dependency. `sft/` and `grpo/` are sibling stages. **➡️ See [`PARQUET_TRAINING.md`](PARQUET_TRAINING.md) for setup, configs, and the SFT/GRPO examples.**
-> 🧩 **`parquet_dataloader_omni_mirl` branch:** the **omni / fork** training path — Qwen2.5-Omni-7B SFT (parquet) + **GRPO + TARPO** on the `DDVD233/verl` fork, reading the HBA parquet directly. **➡️ See [`OMNI_TRAINING.md`](OMNI_TRAINING.md).** (For the upstream-verl, vision path, see the `parquet_dataloader` branch.)
+> 🗂️ **Repo layout:** training code lives under [`training/`](training/) — `training/sft/` (supervised fine-tuning) and `training/rl/` (GRPO + HARPO). Evaluation utilities are in [`evaluation/`](evaluation/), extra docs in [`docs/`](docs/). The RL engine is the [`verl/`](verl/) submodule. See **[`docs/CODE_STRUCTURE.md`](docs/CODE_STRUCTURE.md)** for a full map.
+>
+> 🧩 **`parquet_dataloader` branch:** adds a model-agnostic, **parquet-native SFT + GRPO** pipeline that runs on **upstream [verl](https://github.com/volcengine/verl) `@ main`** — the `verl/` submodule is repointed from the fork, with no `mirl` dependency. `training/sft/` and `training/rl/` are sibling stages. **➡️ See [`docs/PARQUET_TRAINING.md`](docs/PARQUET_TRAINING.md) for setup, configs, and the SFT/GRPO examples.**
+> 🧩 **`parquet_dataloader_omni_mirl` branch:** the **omni / fork** training path — Qwen2.5-Omni-7B SFT (parquet) + **GRPO + HARPO** on the `DDVD233/verl` fork, reading the HBA parquet directly. **➡️ See [`docs/OMNI_TRAINING.md`](docs/OMNI_TRAINING.md).** (For the upstream-verl, vision path, see the `parquet_dataloader` branch.)
 
 ---
 
@@ -119,7 +121,9 @@ OmniSapiens-7B 2.0 is a significantly improved foundation model, trained with a 
 
 ## ⚙️ Training
 
-> **`parquet_dataloader` branch:** this branch also provides a lighter, **upstream-verl** training path — a parquet-native, model-agnostic **SFT + GRPO** pipeline under [`sft/`](sft/) and [`grpo/`](grpo/), documented in **[`PARQUET_TRAINING.md`](PARQUET_TRAINING.md)**. The instructions below describe the original fork-based (`v0.5.0.dev`) setup.
+> ⚡ **Quickstart:** see **[`docs/SETUP.md`](docs/SETUP.md)** for the simple linear setup (clone → **patch verl** (`bash scripts/setup_verl.sh`) → env → data → train). The detailed reference is below.
+>
+> **`parquet_dataloader` branch:** this branch also provides a lighter, **upstream-verl** training path — a parquet-native, model-agnostic **SFT + GRPO** pipeline under [`training/sft/`](training/sft/) and [`training/rl/`](training/rl/), documented in **[`docs/PARQUET_TRAINING.md`](docs/PARQUET_TRAINING.md)**. The instructions below describe the original fork-based (`v0.5.0.dev`) setup.
 
 ### Installation
 
@@ -137,6 +141,18 @@ If you have already cloned the repository without `--recurse-submodules`, initia
 ```bash
 git submodule update --init --recursive
 ```
+
+> **Required (fork / omni path):** the pinned `verl/` submodule does not yet include the
+> HBA **binary-parquet data loader** (lazy decode of embedded audio/video/image bytes,
+> the modality-batching sampler fast-path, and Qwen2.5-Omni model detection). Apply it
+> with the helper script — idempotent, and **no write access to the verl fork is needed**:
+>
+> ```bash
+> bash scripts/setup_verl.sh   # inits the submodule + applies patches/0001-hba-binary-parquet-loader.patch
+> ```
+>
+> Without this, training on the parquet distribution fails with
+> `pyarrow ArrowInvalid: Invalid UTF8 payload`. See [`docs/CODE_STRUCTURE.md`](docs/CODE_STRUCTURE.md) §3.
 
 **2. Create a conda environment:**
 
@@ -198,7 +214,7 @@ cd MathRuler && pip install . && cd ..
 pip install pandas tqdm tenacity anthropic openai wandb
 ```
 
-These are required for `misc_eval_utils/llm_grader/llm_judge_eval.py`, which grades free-form QA outputs using an LLM judge.
+These are required for `evaluation/llm_grader/llm_judge_eval.py`, which grades free-form QA outputs using an LLM judge.
 
 **9. Set up PYTHONPATH:**
 
@@ -210,16 +226,17 @@ export PYTHONPATH="/path/to/human_behavior_atlas/verl:$PYTHONPATH"
 
 ### Reinforcement Learning Training
 
-After downloading the [HBA benchmark](https://huggingface.co/HumanBehaviorAtlas), you can launch GRPO training using the provided script:
+After downloading the [HBA benchmark](https://huggingface.co/HumanBehaviorAtlas) and running `bash scripts/setup_verl.sh`, launch RL training with the provided scripts:
 
 ```bash
-cd verl/examples/grpo_trainer
-bash _train_grpo_hba.sh
+cd training/rl
+HBA_DATA_DIR=/path/to/human_behavior_atlas_v2 ./run_grpo.sh 4     # GRPO
+HBA_DATA_DIR=/path/to/human_behavior_atlas_v2 ./run_harpo.sh 4    # HARPO (Heterogeneity-Aware RPO)
 ```
 
-Edit `_train_grpo_hba.sh` to configure data paths, GPU allocation, and training hyperparameters for your setup.
+Each script trains on the full HBA parquet directly (the fork's `data.modalities` / modality-batching keys), auto-merging the latest SFT checkpoint if `MODEL_PATH` is unset. Edit the script (or pass env vars `MODEL_PATH`, `SAVE_DIR`, hydra overrides) to configure paths, GPUs, and hyperparameters.
 
-> **Note:** While the paper uses the GRPO method, the integration with VERL is intended to make it convenient to use other RL variants (e.g., REINFORCE, DAPO). See the [VERL documentation](https://verl.readthedocs.io/) for further instructions on alternative algorithms.
+> **Note:** While the paper uses GRPO/HARPO, the VERL integration makes it convenient to use other RL variants (e.g., REINFORCE, DAPO). See the [VERL documentation](https://verl.readthedocs.io/) for alternative algorithms.
 
 ### Supervised Fine-Tuning (SFT)
 
@@ -228,7 +245,7 @@ SFT training follows a three-stage pipeline. Each stage builds on the previous o
 **Stage 1 — Classification Training**
 
 ```bash
-cd sft
+cd training/sft
 bash run_classification.sh
 ```
 
@@ -261,7 +278,7 @@ Validation behavior differs by dataset type and applies uniformly across **all t
 **QA datasets (IntentQA, MIMEQA, SIQ2)** — Because these tasks require free-form text generation, accuracy cannot be computed with exact string matching. After training, run the LLM judge evaluation script:
 
 ```bash
-cd misc_eval_utils/llm_grader
+cd evaluation/llm_grader
 bash run_llm_judge_eval.sh
 ```
 

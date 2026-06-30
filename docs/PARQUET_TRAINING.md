@@ -10,12 +10,13 @@ The `verl/` submodule on this branch points at **upstream `volcengine/verl @ mai
 
 ## Layout
 
-`sft/` and `grpo/` are sibling top-level stages (SFT → merge → GRPO):
+`training/sft/` and `training/rl/` are sibling stages under `training/` (SFT → merge → GRPO):
 
 ```
 human_behavior_atlas/
-├── sft/      # supervised fine-tuning (accelerate; no verl needed)
-├── grpo/     # GRPO RL on upstream verl
+├── training/
+│   ├── sft/  # supervised fine-tuning (accelerate; no verl needed)
+│   └── rl/   # GRPO RL on upstream verl
 └── verl/     # submodule → volcengine/verl @ main
 ```
 
@@ -23,15 +24,15 @@ human_behavior_atlas/
 
 | File | Purpose |
 |------|---------|
-| `sft/dataset/sft_parquet_dataset.py` | Direct-from-parquet dataloader (pyarrow, no HF-datasets cache). Adds **modality filtering** (via `modality_signature`), **seek-based video frame sampling** (HBA clips are 40–235 MB), and inactive-tag stripping. |
-| `sft/trainer/sft_trainer.py` | accelerate + FSDP teacher-forced LM trainer (response-only loss). |
-| `sft/train_sft.py` | Model-agnostic entry point. Model class chosen by `model.arch`. |
-| `sft/merge_lora.py` | Merge the LoRA adapter into the base model (simple VLM path + omni-thinker path). |
-| `sft/configs/config_sft.yaml` | Vision SFT config (Qwen3-VL-4B). |
-| `sft/configs/config_sft_gemma4_audio.yaml` | Audio SFT config (Gemma 4 E4B) — uses HBA's audio rows, upstream-only. |
-| `grpo/prepare_grpo_data.py` | Convert HBA parquet → **verl-native** RLHF parquet (prompt as chat messages, video → frame-path lists, `reward_model.ground_truth`). |
-| `grpo/reward_function.py` | verl `reward_manager=batch` reward (exact-match + format + cosine-sim). |
-| `grpo/run_grpo.sh` | `verl.trainer.main_ppo` GRPO launcher (fork-only keys removed). |
+| `training/sft/dataset/sft_parquet_dataset.py` | Direct-from-parquet dataloader (pyarrow, no HF-datasets cache). Adds **modality filtering** (via `modality_signature`), **seek-based video frame sampling** (HBA clips are 40–235 MB), and inactive-tag stripping. |
+| `training/sft/trainer/sft_trainer.py` | accelerate + FSDP teacher-forced LM trainer (response-only loss). |
+| `training/sft/train_sft.py` | Model-agnostic entry point. Model class chosen by `model.arch`. |
+| `training/sft/merge_lora.py` | Merge the LoRA adapter into the base model (simple VLM path + omni-thinker path). |
+| `training/sft/configs/config_sft.yaml` | Vision SFT config (Qwen3-VL-4B). |
+| `training/sft/configs/config_sft_gemma4_audio.yaml` | Audio SFT config (Gemma 4 E4B) — uses HBA's audio rows, upstream-only. |
+| `training/rl/prepare_grpo_data.py` | Convert HBA parquet → **verl-native** RLHF parquet (prompt as chat messages, video → frame-path lists, `reward_model.ground_truth`). |
+| `training/rl/reward_function.py` | verl `reward_manager=batch` reward (exact-match + format + cosine-sim). |
+| `training/rl/run_grpo.sh` | `verl.trainer.main_ppo` GRPO launcher (fork-only keys removed). |
 
 ## Model / modality support on latest verl (June 2026)
 
@@ -58,7 +59,7 @@ git clone --recurse-submodules -b parquet_dataloader https://github.com/MIT-MI/h
 **SFT env (light, no verl):**
 ```bash
 conda create -n hba_sft python=3.11 && conda activate hba_sft
-pip install -r sft/requirements_accelerate.txt
+pip install -r training/sft/requirements_accelerate.txt
 ```
 
 **GRPO env (upstream verl + vLLM ≥ 0.11):**
@@ -66,7 +67,7 @@ pip install -r sft/requirements_accelerate.txt
 conda create -n hba_verl python=3.11 && conda activate hba_verl
 pip install "vllm>=0.11,<0.12"
 pip install -e ./verl                       # upstream volcengine/verl @ main submodule
-pip install -r grpo/requirements_grpo.txt
+pip install -r training/rl/requirements_grpo.txt
 ```
 
 ## Data
@@ -82,7 +83,7 @@ with columns `problem`, `answer`, `dataset`, `task`, `modality_signature`,
 ## SFT
 
 ```bash
-cd sft
+cd training/sft
 HBA_DATA_DIR=/path/to/human_behavior_atlas_v2 ./run_sft.sh 1                          # Qwen3-VL-4B, 1 GPU
 HBA_DATA_DIR=/path/to/human_behavior_atlas_v2 ./run_sft.sh 4 configs/config_sft_gemma4_audio.yaml
 ```
@@ -105,13 +106,13 @@ python merge_lora.py --arch auto \
 
 ```bash
 conda activate hba_verl
-cd grpo
+cd training/rl
 
 # 1) Build verl-native parquet from the HBA video subset (one-time)
 python prepare_grpo_data.py --data_dir $HBA_DATA_DIR --out_dir ./grpo_data \
-    --split train      --modality video --max_samples 256
+    --split train      --modality video
 python prepare_grpo_data.py --data_dir $HBA_DATA_DIR --out_dir ./grpo_data \
-    --split validation --modality video --max_samples 32
+    --split validation --modality video
 
 # 2) Train (defaults to base Qwen3-VL-4B; set MODEL_PATH to the merged SFT ckpt)
 MODEL_PATH=../sft/checkpoints/sft_qwen3vl_hba_merged ./run_grpo.sh 1

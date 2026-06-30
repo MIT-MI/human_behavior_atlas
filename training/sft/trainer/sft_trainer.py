@@ -406,7 +406,7 @@ class SFTTrainer:
 
     def train(self):
         """Main training loop."""
-        train_split = self.dataset_config.get("train_split", "train[:10%]")
+        train_split = self.dataset_config.get("train_split", "train")
         val_split = self.dataset_config.get("val_split", "validation")
 
         print(f"[SFTTrainer] Building dataloaders...")

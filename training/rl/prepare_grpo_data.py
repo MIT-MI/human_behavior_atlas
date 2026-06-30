@@ -20,7 +20,7 @@ Usage:
     python prepare_grpo_data.py \
         --data_dir /data/human_behavior_atlas_v2 \
         --out_dir  ./grpo_data --split train --modality video \
-        --max_samples 64 --nframes 8
+        --nframes 8
 """
 import argparse
 import glob
@@ -98,7 +98,8 @@ def main():
     ap.add_argument("--out_dir", required=True)
     ap.add_argument("--split", default="train")
     ap.add_argument("--modality", choices=["video", "image"], default="video")
-    ap.add_argument("--max_samples", type=int, default=64)
+    ap.add_argument("--max_samples", type=int, default=None,
+                    help="cap on samples per split (default: None = use all)")
     ap.add_argument("--nframes", type=int, default=8)
     ap.add_argument("--out_name", default=None, help="output parquet filename (default: {split}.parquet)")
     args = ap.parse_args()
@@ -113,13 +114,13 @@ def main():
     rows = []
     n = 0
     for f in files:
-        if n >= args.max_samples:
+        if args.max_samples is not None and n >= args.max_samples:
             break
         df = pd.read_parquet(f)
         if "modality_signature" in df.columns:
             df = df[df["modality_signature"].str.contains(keyword, case=False, na=False)]
         for _, row in df.iterrows():
-            if n >= args.max_samples:
+            if args.max_samples is not None and n >= args.max_samples:
                 break
             answer = str(row.get("answer", ""))
             problem = str(row.get("problem", ""))

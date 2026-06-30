@@ -45,14 +45,18 @@ if [ ! -f "$MODEL_PATH/config.json" ]; then
         --adapter_path "$LATEST_CKPT" --output_path "$MODEL_PATH" || { echo "merge failed"; exit 1; }
 fi
 
-# Data: GRPO uses train[~10%:] (no overlap with SFT's first 10%).
+# Data: full HBA train split (all shards) + full validation split.
 DATA_DIR=${HBA_DATA_DIR:-"/path/to/human_behavior_atlas_v2"}
 TRAIN_FILE_LIST="["
-for f in ${DATA_DIR}/train-{00032..00292}-of-00293.parquet; do
+for f in ${DATA_DIR}/train-*-of-*.parquet; do
     [ -f "$f" ] && TRAIN_FILE_LIST="${TRAIN_FILE_LIST}${f},"
 done
 TRAIN_FILE_LIST="${TRAIN_FILE_LIST%,}]"
-VAL_FILE="${DATA_DIR}/validation-00004-of-00013.parquet"
+VAL_FILE_LIST="["
+for f in ${DATA_DIR}/validation-*-of-*.parquet; do
+    [ -f "$f" ] && VAL_FILE_LIST="${VAL_FILE_LIST}${f},"
+done
+VAL_FILE_LIST="${VAL_FILE_LIST%,}]"
 
 SAVE_DIR=${SAVE_DIR:-"${HBA_ROOT}/training/rl/checkpoints/grpo_qwen_omni_hba"}
 REWARD_FN="${GRPO_DIR}/reward_function/human_behaviour.py"
@@ -61,7 +65,7 @@ FORMAT_PROMPT="${GRPO_DIR}/format_prompt/default.jinja"
 python3 -m verl.trainer.main_ppo \
     algorithm.adv_estimator=grpo \
     data.train_files="$TRAIN_FILE_LIST" \
-    data.val_files="$VAL_FILE" \
+    data.val_files="$VAL_FILE_LIST" \
     data.train_batch_size=32 \
     data.val_batch_size=8 \
     data.max_prompt_length=3072 \

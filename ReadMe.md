@@ -8,10 +8,10 @@ OmniSapiens 2.0 is a first-of-its-kind foundation model for unified social behav
 
 Together, we hope that HBA and OmniSapiens 2.0 provide a unified ecosystem for advancing socially intelligent AI systems capable of interpretable and robust human behavior understanding.
 
-> 🗂️ **Repo layout:** training code lives under [`training/`](training/) — `training/sft/` (supervised fine-tuning) and `training/rl/` (GRPO + TARPO). Evaluation utilities are in [`evaluation/`](evaluation/), extra docs in [`docs/`](docs/). The RL engine is the [`verl/`](verl/) submodule. See **[`docs/CODE_STRUCTURE.md`](docs/CODE_STRUCTURE.md)** for a full map.
+> 🗂️ **Repo layout:** training code lives under [`training/`](training/) — `training/sft/` (supervised fine-tuning) and `training/rl/` (GRPO + HARPO). Evaluation utilities are in [`evaluation/`](evaluation/), extra docs in [`docs/`](docs/). The RL engine is the [`verl/`](verl/) submodule. See **[`docs/CODE_STRUCTURE.md`](docs/CODE_STRUCTURE.md)** for a full map.
 >
 > 🧩 **`parquet_dataloader` branch:** adds a model-agnostic, **parquet-native SFT + GRPO** pipeline that runs on **upstream [verl](https://github.com/volcengine/verl) `@ main`** — the `verl/` submodule is repointed from the fork, with no `mirl` dependency. `training/sft/` and `training/rl/` are sibling stages. **➡️ See [`docs/PARQUET_TRAINING.md`](docs/PARQUET_TRAINING.md) for setup, configs, and the SFT/GRPO examples.**
-> 🧩 **`parquet_dataloader_omni_mirl` branch:** the **omni / fork** training path — Qwen2.5-Omni-7B SFT (parquet) + **GRPO + TARPO** on the `DDVD233/verl` fork, reading the HBA parquet directly. **➡️ See [`docs/OMNI_TRAINING.md`](docs/OMNI_TRAINING.md).** (For the upstream-verl, vision path, see the `parquet_dataloader` branch.)
+> 🧩 **`parquet_dataloader_omni_mirl` branch:** the **omni / fork** training path — Qwen2.5-Omni-7B SFT (parquet) + **GRPO + HARPO** on the `DDVD233/verl` fork, reading the HBA parquet directly. **➡️ See [`docs/OMNI_TRAINING.md`](docs/OMNI_TRAINING.md).** (For the upstream-verl, vision path, see the `parquet_dataloader` branch.)
 
 ---
 

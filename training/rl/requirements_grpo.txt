@@ -1,4 +1,4 @@
-# Extra packages for the OMNI GRPO/TARPO path on the FORK verl (DDVD233/verl).
+# Extra packages for the OMNI GRPO/HARPO path on the FORK verl (DDVD233/verl).
 # This path needs the fork (the ../verl submodule on this branch), NOT upstream verl.
 #
 #   conda create -n verl python==3.12.2 && conda activate verl

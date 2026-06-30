@@ -15,7 +15,7 @@ human_behavior_atlas/
 │                          #   parquet_dataloader -> volcengine/verl @ main (upstream)
 ├── training/
 │   ├── sft/               # Supervised fine-tuning (Accelerate; no verl needed)
-│   └── rl/                # GRPO / TARPO launch scripts + reward functions
+│   └── rl/                # GRPO / HARPO launch scripts + reward functions
 ├── evaluation/
 │   └── llm_grader/        # LLM-judge eval for free-form QA tasks
 ├── docs/
@@ -28,7 +28,7 @@ human_behavior_atlas/
 ### Branches
 | Branch | `verl/` submodule | Focus |
 |--------|-------------------|-------|
-| `main` | `DDVD233/verl` (omni fork) | Qwen2.5-Omni-7B SFT + **GRPO + TARPO**, reads HBA parquet directly |
+| `main` | `DDVD233/verl` (omni fork) | Qwen2.5-Omni-7B SFT + **GRPO + HARPO**, reads HBA parquet directly |
 | `parquet_dataloader` | `volcengine/verl @ main` (upstream) | model-agnostic vision SFT + GRPO (verl-native parquet) |
 
 Both branches share the `training/{sft,rl}` + `evaluation/` + `docs/` layout; only the
@@ -55,14 +55,14 @@ each batch is homogeneous in modality so the multimodal processor stays consiste
 ```bash
 cd training/rl
 HBA_DATA_DIR=/path/to/human_behavior_atlas_v2 ./run_grpo.sh 4     # GRPO
-HBA_DATA_DIR=/path/to/human_behavior_atlas_v2 ./run_tarpo.sh 4    # TARPO (fork-only)
+HBA_DATA_DIR=/path/to/human_behavior_atlas_v2 ./run_harpo.sh 4    # HARPO (fork-only)
 ```
 
 | Path | Role |
 |------|------|
-| `training/rl/run_grpo.sh` / `run_tarpo.sh` | Launchers. Resolve repo root, set `PYTHONPATH` to the `verl/` submodule, build the parquet shard list, auto-merge an SFT checkpoint if needed, run `verl.trainer.main_ppo`. |
+| `training/rl/run_grpo.sh` / `run_harpo.sh` | Launchers. Resolve repo root, set `PYTHONPATH` to the `verl/` submodule, build the parquet shard list, auto-merge an SFT checkpoint if needed, run `verl.trainer.main_ppo`. |
 | `training/rl/reward_function/human_behaviour.py` | GRPO reward (`human_behaviour_compute_score_batch`). |
-| `training/rl/reward_function/human_behaviour_tarpo.py` | TARPO (task-aware) reward. |
+| `training/rl/reward_function/human_behaviour_harpo.py` | HARPO (task-aware) reward. |
 | `training/rl/format_prompt/default.jinja` | Prompt wrapper. |
 | `verl/verl/utils/dataset/rl_dataset.py` | **The RL data loader** (`RLHFDataset`) — reads parquet/jsonl, builds messages, tokenizes, emits multimodal tensors. |
 | `verl/verl/trainer/main_ppo.py` | Trainer entrypoint; builds dataset + modality sampler (`create_rl_sampler`). |

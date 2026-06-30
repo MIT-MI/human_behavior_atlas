@@ -1,8 +1,8 @@
 diff --git a/examples/grpo_trainer/_train_grpo_hba.sh b/examples/grpo_trainer/_train_grpo_hba.sh
-index 5fc38d6b..f8ea546a 100755
+index 5fc38d6b..dc623141 100755
 --- a/examples/grpo_trainer/_train_grpo_hba.sh
 +++ b/examples/grpo_trainer/_train_grpo_hba.sh
-@@ -1,76 +1,134 @@
+@@ -1,76 +1,132 @@
  #!/usr/bin/env bash
 +# =============================================================================
 +# GRPO training for Qwen2.5-Omni-7B on the Human Behavior Atlas (HBA) benchmark.
@@ -38,12 +38,8 @@ index 5fc38d6b..f8ea546a 100755
 +[ -f "${MODEL_PATH}/config.json" ] || MODEL_PATH="Qwen/Qwen2.5-Omni-7B"
 +
 +# Local parquet data root (the HBA parquet distribution).
++# Trains on the FULL train split (all shards under DATA_DIR).
 +DATA_DIR=${DATA_DIR:-"/home/sboughorbel/data/human_behavior_atlas_v2"}
-+# Training shards: a contiguous shard range (defaults avoid the first shards,
-+# which are commonly reserved for SFT). Override TRAIN_START/TRAIN_END as needed.
-+TRAIN_START=${TRAIN_START:-32}
-+TRAIN_END=${TRAIN_END:-292}
-+N_SHARDS=${N_SHARDS:-293}
 +
 +SAVE_DIR=${SAVE_DIR:-"/home/sboughorbel/checkpoints/grpo_qwen_omni_hba"}
 +mkdir -p "${SAVE_DIR}"
@@ -59,20 +55,22 @@ index 5fc38d6b..f8ea546a 100755
 +export VLLM_USE_V1=0
 +export RAY_memory_usage_threshold=0.98
 +
-+# ---- Build the train-shard file list ----------------------------------------
-+pad() { printf "%05d" "$1"; }
++# ---- Build the full train + validation file lists ---------------------------
 +TRAIN_FILE_LIST="["
-+for i in $(seq "${TRAIN_START}" "${TRAIN_END}"); do
-+    f="${DATA_DIR}/train-$(pad "$i")-of-$(pad "$N_SHARDS").parquet"
++for f in ${DATA_DIR}/train-*-of-*.parquet; do
 +    [ -f "$f" ] && TRAIN_FILE_LIST="${TRAIN_FILE_LIST}${f},"
 +done
 +TRAIN_FILE_LIST="${TRAIN_FILE_LIST%,}]"
-+VAL_FILE=${VAL_FILE:-"${DATA_DIR}/validation-00004-of-00013.parquet"}
++VAL_FILE_LIST="["
++for f in ${DATA_DIR}/validation-*-of-*.parquet; do
++    [ -f "$f" ] && VAL_FILE_LIST="${VAL_FILE_LIST}${f},"
++done
++VAL_FILE_LIST="${VAL_FILE_LIST%,}]"
 +
 +python3 -m verl.trainer.main_ppo \
 +    algorithm.adv_estimator=grpo \
 +    data.train_files="$TRAIN_FILE_LIST" \
-+    data.val_files="$VAL_FILE" \
++    data.val_files="$VAL_FILE_LIST" \
 +    data.train_batch_size=32 \
 +    data.val_batch_size=8 \
 +    data.max_prompt_length=3072 \

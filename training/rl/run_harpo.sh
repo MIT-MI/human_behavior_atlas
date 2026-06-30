@@ -1,12 +1,12 @@
 #!/bin/bash
-# TARPO for Qwen2.5-Omni-7B on Human Behavior Atlas — FORK path (DDVD233/verl).
+# HARPO for Qwen2.5-Omni-7B on Human Behavior Atlas — FORK path (DDVD233/verl).
 #
-# TARPO is a fork-only advantage estimator that adds task-level adaptation over GRPO:
+# HARPO is a fork-only advantage estimator that adds task-level adaptation over GRPO:
 #   task-level normalization + mixture adapters, CVaR tail boosting for imbalanced
 #   tasks, class-based weighting, and per-task EMA buffers. It is NOT available in
 #   upstream verl — this recipe requires the fork (the verl/ submodule on this branch).
 #
-# Usage:   ./run_tarpo.sh [NUM_GPUS]     (default 4)
+# Usage:   ./run_harpo.sh [NUM_GPUS]     (default 4)
 # Env:     HBA_DATA_DIR, MODEL_PATH, SAVE_DIR
 set -x
 
@@ -41,20 +41,24 @@ fi
 
 DATA_DIR=${HBA_DATA_DIR:-"/path/to/human_behavior_atlas_v2"}
 TRAIN_FILE_LIST="["
-for f in ${DATA_DIR}/train-{00032..00292}-of-00293.parquet; do
+for f in ${DATA_DIR}/train-*-of-*.parquet; do
     [ -f "$f" ] && TRAIN_FILE_LIST="${TRAIN_FILE_LIST}${f},"
 done
 TRAIN_FILE_LIST="${TRAIN_FILE_LIST%,}]"
-VAL_FILE="${DATA_DIR}/validation-00004-of-00013.parquet"
+VAL_FILE_LIST="["
+for f in ${DATA_DIR}/validation-*-of-*.parquet; do
+    [ -f "$f" ] && VAL_FILE_LIST="${VAL_FILE_LIST}${f},"
+done
+VAL_FILE_LIST="${VAL_FILE_LIST%,}]"
 
-SAVE_DIR=${SAVE_DIR:-"${HBA_ROOT}/training/rl/checkpoints/tarpo_qwen_omni_hba"}
-REWARD_FN="${GRPO_DIR}/reward_function/human_behaviour_tarpo.py"
+SAVE_DIR=${SAVE_DIR:-"${HBA_ROOT}/training/rl/checkpoints/harpo_qwen_omni_hba"}
+REWARD_FN="${GRPO_DIR}/reward_function/human_behaviour_harpo.py"
 FORMAT_PROMPT="${GRPO_DIR}/format_prompt/default.jinja"
 
 python3 -m verl.trainer.main_ppo \
-    algorithm.adv_estimator=tarpo \
+    algorithm.adv_estimator=harpo \
     data.train_files="$TRAIN_FILE_LIST" \
-    data.val_files="$VAL_FILE" \
+    data.val_files="$VAL_FILE_LIST" \
     data.train_batch_size=32 \
     data.val_batch_size=8 \
     data.max_prompt_length=3072 \
@@ -103,8 +107,8 @@ python3 -m verl.trainer.main_ppo \
     reward_model.reward_manager=batch \
     trainer.critic_warmup=0 \
     trainer.logger='["console","wandb"]' \
-    trainer.project_name='tarpo-qwen-omni-hba' \
-    trainer.experiment_name='tarpo_sft_init' \
+    trainer.project_name='harpo-qwen-omni-hba' \
+    trainer.experiment_name='harpo_sft_init' \
     trainer.n_gpus_per_node="$NUM_GPUS" \
     trainer.nnodes=1 \
     trainer.save_freq=500 \
@@ -116,4 +120,4 @@ python3 -m verl.trainer.main_ppo \
     trainer.advantage_plot_freq=15 \
     trainer.resume_mode=auto
 
-echo "TARPO training completed!"
+echo "HARPO training completed!"

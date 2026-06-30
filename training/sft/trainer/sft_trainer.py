@@ -263,7 +263,7 @@ class SFTTrainer:
     def validate_generation(self, val_dataloader, global_step=0, max_new_tokens=64, max_samples=1000):
         """
         Generation-based validation: generate text, compare with ground truth.
-        Computes per-dataset accuracy and logs to wandb, matching TARPO evaluation.
+        Computes per-dataset accuracy and logs to wandb, matching HARPO evaluation.
         Caps at max_samples to keep generation time reasonable.
         """
         self.model.eval()
@@ -339,7 +339,7 @@ class SFTTrainer:
         return metrics
 
     def _compute_generation_metrics(self, predictions, ground_truths, datasets, tasks, global_step):
-        """Compute per-dataset accuracy and aggregate metrics, matching TARPO evaluation."""
+        """Compute per-dataset accuracy and aggregate metrics, matching HARPO evaluation."""
         metrics = {}
 
         # Overall accuracy

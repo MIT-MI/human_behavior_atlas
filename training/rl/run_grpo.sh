@@ -12,9 +12,9 @@
 #   1. conda activate hba_verl   (upstream verl@main + vLLM>=0.11 + transformers>=4.57)
 #   2. Build the data once:
 #        python prepare_grpo_data.py --data_dir $HBA_DATA_DIR --out_dir ./grpo_data \
-#            --split train      --modality video --max_samples 256
+#            --split train      --modality video
 #        python prepare_grpo_data.py --data_dir $HBA_DATA_DIR --out_dir ./grpo_data \
-#            --split validation --modality video --max_samples 32
+#            --split validation --modality video
 #
 # Usage:
 #   ./run_grpo.sh [NUM_GPUS]

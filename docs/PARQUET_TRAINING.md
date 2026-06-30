@@ -110,9 +110,9 @@ cd training/rl
 
 # 1) Build verl-native parquet from the HBA video subset (one-time)
 python prepare_grpo_data.py --data_dir $HBA_DATA_DIR --out_dir ./grpo_data \
-    --split train      --modality video --max_samples 256
+    --split train      --modality video
 python prepare_grpo_data.py --data_dir $HBA_DATA_DIR --out_dir ./grpo_data \
-    --split validation --modality video --max_samples 32
+    --split validation --modality video
 
 # 2) Train (defaults to base Qwen3-VL-4B; set MODEL_PATH to the merged SFT ckpt)
 MODEL_PATH=../sft/checkpoints/sft_qwen3vl_hba_merged ./run_grpo.sh 1

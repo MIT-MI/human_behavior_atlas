@@ -1,143 +1,20 @@
 diff --git a/examples/grpo_trainer/_train_grpo_hba.sh b/examples/grpo_trainer/_train_grpo_hba.sh
-index 5fc38d6b..dc623141 100755
+deleted file mode 100755
+index 5fc38d6b..00000000
 --- a/examples/grpo_trainer/_train_grpo_hba.sh
-+++ b/examples/grpo_trainer/_train_grpo_hba.sh
-@@ -1,76 +1,132 @@
- #!/usr/bin/env bash
-+# =============================================================================
-+# GRPO training for Qwen2.5-Omni-7B on the Human Behavior Atlas (HBA) benchmark.
-+#
-+# This script trains on the *parquet* distribution of HBA, in which each sample
-+# embeds its media (audio / video / image) as raw bytes inside the parquet file
-+# (columns are list<binary>). The custom verl RLHFDataset in this fork detects
-+# the binary columns and lazily decodes them on demand — see
-+# verl/utils/dataset/rl_dataset.py (_detect_binary_media / _read_files_lazy).
-+#
-+# Usage:
-+#   bash _train_grpo_hba.sh            # uses all defaults below (4 GPUs)
-+#   NUM_GPUS=2 bash _train_grpo_hba.sh # override GPU count
-+#   bash _train_grpo_hba.sh data.train_batch_size=16   # any extra hydra overrides
-+#
-+# Override any path/knob via environment variables (see the block below).
-+# =============================================================================
- set -x
- 
++++ /dev/null
+@@ -1,76 +0,0 @@
+-#!/usr/bin/env bash
+-set -x
+-
 -# Pin to GPUs 0,1
 -export CUDA_VISIBLE_DEVICES=0,1
 -unset ROCR_VISIBLE_DEVICES
-+# ---- Resolve the verl submodule root from this script's location ------------
-+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"   # -> .../human_behavior_atlas/verl
-+export PYTHONPATH="${SCRIPT_DIR}:${PYTHONPATH}"
-+
-+# ---- User-overridable configuration -----------------------------------------
-+NUM_GPUS=${NUM_GPUS:-4}
-+export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-$(seq -s, 0 $((NUM_GPUS-1)))}
-+
-+# Init model: an SFT-merged Qwen2.5-Omni checkpoint (recommended) or the base model.
-+MODEL_PATH=${MODEL_PATH:-"/home/sboughorbel/checkpoints/sft_qwen_omni_hba_merged"}
-+[ -f "${MODEL_PATH}/config.json" ] || MODEL_PATH="Qwen/Qwen2.5-Omni-7B"
-+
-+# Local parquet data root (the HBA parquet distribution).
-+# Trains on the FULL train split (all shards under DATA_DIR).
-+DATA_DIR=${DATA_DIR:-"/home/sboughorbel/data/human_behavior_atlas_v2"}
-+
-+SAVE_DIR=${SAVE_DIR:-"/home/sboughorbel/checkpoints/grpo_qwen_omni_hba"}
-+mkdir -p "${SAVE_DIR}"
-+
-+REWARD_FN="${SCRIPT_DIR}/examples/reward_function/hb_omnisapiens_v1.py"
-+FORMAT_PROMPT="${SCRIPT_DIR}/examples/format_prompt/default.jinja"
-+
-+# ---- Runtime env ------------------------------------------------------------
- export PYTHONUNBUFFERED=1
- export HYDRA_FULL_ERROR=1
+-export PYTHONUNBUFFERED=1
+-export HYDRA_FULL_ERROR=1
 -export PYTHONPATH="/path/to/verl:$PYTHONPATH"
- export NCCL_ASYNC_ERROR_HANDLING=1
-+export VLLM_USE_V1=0
-+export RAY_memory_usage_threshold=0.98
-+
-+# ---- Build the full train + validation file lists ---------------------------
-+TRAIN_FILE_LIST="["
-+for f in ${DATA_DIR}/train-*-of-*.parquet; do
-+    [ -f "$f" ] && TRAIN_FILE_LIST="${TRAIN_FILE_LIST}${f},"
-+done
-+TRAIN_FILE_LIST="${TRAIN_FILE_LIST%,}]"
-+VAL_FILE_LIST="["
-+for f in ${DATA_DIR}/validation-*-of-*.parquet; do
-+    [ -f "$f" ] && VAL_FILE_LIST="${VAL_FILE_LIST}${f},"
-+done
-+VAL_FILE_LIST="${VAL_FILE_LIST%,}]"
-+
-+python3 -m verl.trainer.main_ppo \
-+    algorithm.adv_estimator=grpo \
-+    data.train_files="$TRAIN_FILE_LIST" \
-+    data.val_files="$VAL_FILE_LIST" \
-+    data.train_batch_size=32 \
-+    data.val_batch_size=8 \
-+    data.max_prompt_length=3072 \
-+    data.max_response_length=2048 \
-+    data.filter_overlong_prompts=False \
-+    data.truncation='right' \
-+    data.image_key=images \
-+    data.video_key=videos \
-+    data.audio_key=audios \
-+    data.prompt_key=problem \
-+    data.dataloader_num_workers=0 \
-+    data.modalities=\'audio,videos\' \
-+    data.train_modality_batching.enabled=True \
-+    data.train_modality_batching.drop_last=True \
-+    data.val_modality_batching.enabled=True \
-+    data.val_modality_batching.drop_last=False \
-+    data.format_prompt="$FORMAT_PROMPT" \
-+    actor_rollout_ref.model.path="$MODEL_PATH" \
-+    actor_rollout_ref.actor.optim.lr=1e-6 \
-+    actor_rollout_ref.model.use_remove_padding=False \
-+    actor_rollout_ref.actor.ppo_mini_batch_size=8 \
-+    actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=1 \
-+    actor_rollout_ref.actor.use_dynamic_bsz=False \
-+    actor_rollout_ref.actor.use_kl_loss=False \
-+    actor_rollout_ref.actor.kl_loss_coef=0 \
-+    actor_rollout_ref.actor.kl_loss_type=low_var_kl \
-+    actor_rollout_ref.actor.entropy_coeff=0 \
-+    actor_rollout_ref.actor.ulysses_sequence_parallel_size=1 \
-+    actor_rollout_ref.model.enable_gradient_checkpointing=True \
-+    actor_rollout_ref.actor.fsdp_config.param_offload=False \
-+    actor_rollout_ref.actor.fsdp_config.optimizer_offload=False \
-+    actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=1 \
-+    actor_rollout_ref.rollout.log_prob_use_dynamic_bsz=False \
-+    actor_rollout_ref.rollout.tensor_model_parallel_size="$NUM_GPUS" \
-+    actor_rollout_ref.rollout.name=vllm \
-+    actor_rollout_ref.rollout.engine_kwargs.vllm.disable_mm_preprocessor_cache=True \
-+    actor_rollout_ref.rollout.gpu_memory_utilization=0.4 \
-+    actor_rollout_ref.rollout.enable_chunked_prefill=False \
-+    actor_rollout_ref.rollout.enforce_eager=True \
-+    actor_rollout_ref.rollout.free_cache_engine=True \
-+    actor_rollout_ref.rollout.n=5 \
-+    actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=1 \
-+    actor_rollout_ref.ref.log_prob_use_dynamic_bsz=False \
-+    actor_rollout_ref.ref.fsdp_config.param_offload=True \
-+    actor_rollout_ref.rollout.max_model_len=5120 \
-+    actor_rollout_ref.rollout.max_num_batched_tokens=5120 \
-+    algorithm.use_kl_in_reward=False \
-+    custom_reward_function.path="$REWARD_FN" \
-+    custom_reward_function.name=human_behaviour_compute_score_batch \
-+    reward_model.reward_manager=batch \
-+    trainer.critic_warmup=0 \
-+    trainer.logger='["console","wandb"]' \
-+    trainer.project_name='human_behavior_atlas' \
-+    trainer.experiment_name='grpo_hba' \
-+    trainer.n_gpus_per_node="$NUM_GPUS" \
-+    trainer.nnodes=1 \
-+    trainer.save_freq=500 \
-+    trainer.max_actor_ckpt_to_keep=2 \
-+    trainer.max_critic_ckpt_to_keep=2 \
-+    trainer.val_before_train=False \
-+    trainer.val_only=False \
-+    trainer.validation_data_dir="$SAVE_DIR" \
-+    trainer.test_freq=99999 \
-+    trainer.total_epochs=5 \
-+    trainer.default_local_dir="$SAVE_DIR" \
-+    trainer.resume_mode=auto "$@"
- 
+-export NCCL_ASYNC_ERROR_HANDLING=1
+-
 -    python3 -m verl.trainer.main_ppo \
 -        algorithm.adv_estimator=grpo \
 -        data.train_files=/path/to/data/human_behaviour_data/final_v8_train_cleaned_2.jsonl \
@@ -204,7 +81,6 @@ index 5fc38d6b..dc623141 100755
 -        trainer.advantage_plot_freq=15 $@ \
 -        trainer.default_local_dir=/path/to/data/grpo
 \ No newline at end of file
-+echo "GRPO training completed!"
 diff --git a/verl/trainer/main_ppo.py b/verl/trainer/main_ppo.py
 index 4baeb1dc..19e5f3a5 100644
 --- a/verl/trainer/main_ppo.py

@@ -224,16 +224,17 @@ export PYTHONPATH="/path/to/human_behavior_atlas/verl:$PYTHONPATH"
 
 ### Reinforcement Learning Training
 
-After downloading the [HBA benchmark](https://huggingface.co/HumanBehaviorAtlas), you can launch GRPO training using the provided script:
+After downloading the [HBA benchmark](https://huggingface.co/HumanBehaviorAtlas) and running `bash scripts/setup_verl.sh`, launch RL training with the provided scripts:
 
 ```bash
-cd verl/examples/grpo_trainer
-bash _train_grpo_hba.sh
+cd training/rl
+HBA_DATA_DIR=/path/to/human_behavior_atlas_v2 ./run_grpo.sh 4     # GRPO
+HBA_DATA_DIR=/path/to/human_behavior_atlas_v2 ./run_harpo.sh 4    # HARPO (Heterogeneity-Aware RPO)
 ```
 
-Edit `_train_grpo_hba.sh` to configure data paths, GPU allocation, and training hyperparameters for your setup.
+Each script trains on the full HBA parquet directly (the fork's `data.modalities` / modality-batching keys), auto-merging the latest SFT checkpoint if `MODEL_PATH` is unset. Edit the script (or pass env vars `MODEL_PATH`, `SAVE_DIR`, hydra overrides) to configure paths, GPUs, and hyperparameters.
 
-> **Note:** While the paper uses the GRPO method, the integration with VERL is intended to make it convenient to use other RL variants (e.g., REINFORCE, DAPO). See the [VERL documentation](https://verl.readthedocs.io/) for further instructions on alternative algorithms.
+> **Note:** While the paper uses GRPO/HARPO, the VERL integration makes it convenient to use other RL variants (e.g., REINFORCE, DAPO). See the [VERL documentation](https://verl.readthedocs.io/) for alternative algorithms.
 
 ### Supervised Fine-Tuning (SFT)
 

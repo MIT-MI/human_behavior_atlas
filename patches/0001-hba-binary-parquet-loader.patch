@@ -1,0 +1,1026 @@
+diff --git a/examples/grpo_trainer/_train_grpo_hba.sh b/examples/grpo_trainer/_train_grpo_hba.sh
+index 5fc38d6b..f8ea546a 100755
+--- a/examples/grpo_trainer/_train_grpo_hba.sh
++++ b/examples/grpo_trainer/_train_grpo_hba.sh
+@@ -1,76 +1,134 @@
+ #!/usr/bin/env bash
++# =============================================================================
++# GRPO training for Qwen2.5-Omni-7B on the Human Behavior Atlas (HBA) benchmark.
++#
++# This script trains on the *parquet* distribution of HBA, in which each sample
++# embeds its media (audio / video / image) as raw bytes inside the parquet file
++# (columns are list<binary>). The custom verl RLHFDataset in this fork detects
++# the binary columns and lazily decodes them on demand — see
++# verl/utils/dataset/rl_dataset.py (_detect_binary_media / _read_files_lazy).
++#
++# Usage:
++#   bash _train_grpo_hba.sh            # uses all defaults below (4 GPUs)
++#   NUM_GPUS=2 bash _train_grpo_hba.sh # override GPU count
++#   bash _train_grpo_hba.sh data.train_batch_size=16   # any extra hydra overrides
++#
++# Override any path/knob via environment variables (see the block below).
++# =============================================================================
+ set -x
+ 
+-# Pin to GPUs 0,1
+-export CUDA_VISIBLE_DEVICES=0,1
+-unset ROCR_VISIBLE_DEVICES
++# ---- Resolve the verl submodule root from this script's location ------------
++SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"   # -> .../human_behavior_atlas/verl
++export PYTHONPATH="${SCRIPT_DIR}:${PYTHONPATH}"
++
++# ---- User-overridable configuration -----------------------------------------
++NUM_GPUS=${NUM_GPUS:-4}
++export CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-$(seq -s, 0 $((NUM_GPUS-1)))}
++
++# Init model: an SFT-merged Qwen2.5-Omni checkpoint (recommended) or the base model.
++MODEL_PATH=${MODEL_PATH:-"/home/sboughorbel/checkpoints/sft_qwen_omni_hba_merged"}
++[ -f "${MODEL_PATH}/config.json" ] || MODEL_PATH="Qwen/Qwen2.5-Omni-7B"
++
++# Local parquet data root (the HBA parquet distribution).
++DATA_DIR=${DATA_DIR:-"/home/sboughorbel/data/human_behavior_atlas_v2"}
++# Training shards: a contiguous shard range (defaults avoid the first shards,
++# which are commonly reserved for SFT). Override TRAIN_START/TRAIN_END as needed.
++TRAIN_START=${TRAIN_START:-32}
++TRAIN_END=${TRAIN_END:-292}
++N_SHARDS=${N_SHARDS:-293}
++
++SAVE_DIR=${SAVE_DIR:-"/home/sboughorbel/checkpoints/grpo_qwen_omni_hba"}
++mkdir -p "${SAVE_DIR}"
++
++REWARD_FN="${SCRIPT_DIR}/examples/reward_function/hb_omnisapiens_v1.py"
++FORMAT_PROMPT="${SCRIPT_DIR}/examples/format_prompt/default.jinja"
++
++# ---- Runtime env ------------------------------------------------------------
+ export PYTHONUNBUFFERED=1
+ export HYDRA_FULL_ERROR=1
+-export PYTHONPATH="/path/to/verl:$PYTHONPATH"
+ export NCCL_ASYNC_ERROR_HANDLING=1
++export VLLM_USE_V1=0
++export RAY_memory_usage_threshold=0.98
++
++# ---- Build the train-shard file list ----------------------------------------
++pad() { printf "%05d" "$1"; }
++TRAIN_FILE_LIST="["
++for i in $(seq "${TRAIN_START}" "${TRAIN_END}"); do
++    f="${DATA_DIR}/train-$(pad "$i")-of-$(pad "$N_SHARDS").parquet"
++    [ -f "$f" ] && TRAIN_FILE_LIST="${TRAIN_FILE_LIST}${f},"
++done
++TRAIN_FILE_LIST="${TRAIN_FILE_LIST%,}]"
++VAL_FILE=${VAL_FILE:-"${DATA_DIR}/validation-00004-of-00013.parquet"}
++
++python3 -m verl.trainer.main_ppo \
++    algorithm.adv_estimator=grpo \
++    data.train_files="$TRAIN_FILE_LIST" \
++    data.val_files="$VAL_FILE" \
++    data.train_batch_size=32 \
++    data.val_batch_size=8 \
++    data.max_prompt_length=3072 \
++    data.max_response_length=2048 \
++    data.filter_overlong_prompts=False \
++    data.truncation='right' \
++    data.image_key=images \
++    data.video_key=videos \
++    data.audio_key=audios \
++    data.prompt_key=problem \
++    data.dataloader_num_workers=0 \
++    data.modalities=\'audio,videos\' \
++    data.train_modality_batching.enabled=True \
++    data.train_modality_batching.drop_last=True \
++    data.val_modality_batching.enabled=True \
++    data.val_modality_batching.drop_last=False \
++    data.format_prompt="$FORMAT_PROMPT" \
++    actor_rollout_ref.model.path="$MODEL_PATH" \
++    actor_rollout_ref.actor.optim.lr=1e-6 \
++    actor_rollout_ref.model.use_remove_padding=False \
++    actor_rollout_ref.actor.ppo_mini_batch_size=8 \
++    actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=1 \
++    actor_rollout_ref.actor.use_dynamic_bsz=False \
++    actor_rollout_ref.actor.use_kl_loss=False \
++    actor_rollout_ref.actor.kl_loss_coef=0 \
++    actor_rollout_ref.actor.kl_loss_type=low_var_kl \
++    actor_rollout_ref.actor.entropy_coeff=0 \
++    actor_rollout_ref.actor.ulysses_sequence_parallel_size=1 \
++    actor_rollout_ref.model.enable_gradient_checkpointing=True \
++    actor_rollout_ref.actor.fsdp_config.param_offload=False \
++    actor_rollout_ref.actor.fsdp_config.optimizer_offload=False \
++    actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=1 \
++    actor_rollout_ref.rollout.log_prob_use_dynamic_bsz=False \
++    actor_rollout_ref.rollout.tensor_model_parallel_size="$NUM_GPUS" \
++    actor_rollout_ref.rollout.name=vllm \
++    actor_rollout_ref.rollout.engine_kwargs.vllm.disable_mm_preprocessor_cache=True \
++    actor_rollout_ref.rollout.gpu_memory_utilization=0.4 \
++    actor_rollout_ref.rollout.enable_chunked_prefill=False \
++    actor_rollout_ref.rollout.enforce_eager=True \
++    actor_rollout_ref.rollout.free_cache_engine=True \
++    actor_rollout_ref.rollout.n=5 \
++    actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=1 \
++    actor_rollout_ref.ref.log_prob_use_dynamic_bsz=False \
++    actor_rollout_ref.ref.fsdp_config.param_offload=True \
++    actor_rollout_ref.rollout.max_model_len=5120 \
++    actor_rollout_ref.rollout.max_num_batched_tokens=5120 \
++    algorithm.use_kl_in_reward=False \
++    custom_reward_function.path="$REWARD_FN" \
++    custom_reward_function.name=human_behaviour_compute_score_batch \
++    reward_model.reward_manager=batch \
++    trainer.critic_warmup=0 \
++    trainer.logger='["console","wandb"]' \
++    trainer.project_name='human_behavior_atlas' \
++    trainer.experiment_name='grpo_hba' \
++    trainer.n_gpus_per_node="$NUM_GPUS" \
++    trainer.nnodes=1 \
++    trainer.save_freq=500 \
++    trainer.max_actor_ckpt_to_keep=2 \
++    trainer.max_critic_ckpt_to_keep=2 \
++    trainer.val_before_train=False \
++    trainer.val_only=False \
++    trainer.validation_data_dir="$SAVE_DIR" \
++    trainer.test_freq=99999 \
++    trainer.total_epochs=5 \
++    trainer.default_local_dir="$SAVE_DIR" \
++    trainer.resume_mode=auto "$@"
+ 
+-    python3 -m verl.trainer.main_ppo \
+-        algorithm.adv_estimator=grpo \
+-        data.train_files=/path/to/data/human_behaviour_data/final_v8_train_cleaned_2.jsonl \
+-        data.val_files=/path/to/data/human_behaviour_data/final_v8_val_cleaned.jsonl \
+-        data.train_batch_size=256 \
+-        data.val_batch_size=64 \
+-        data.max_prompt_length=4096 \
+-        data.max_response_length=4096 \
+-        data.filter_overlong_prompts=False \
+-        data.truncation='right' \
+-        data.image_key=images \
+-        data.video_key=videos \
+-        data.prompt_key=problem \
+-        data.dataloader_num_workers=8 \
+-        data.modalities=\'audio,videos\' \
+-        data.train_modality_batching.enabled=True \
+-        data.train_modality_batching.drop_last=True \
+-        data.val_modality_batching.enabled=True \
+-        data.val_modality_batching.drop_last=False \
+-        data.format_prompt=/path/to/verl/examples/format_prompt/default.jinja \
+-        actor_rollout_ref.model.path=Qwen/Qwen2.5-Omni-7B \
+-        actor_rollout_ref.actor.optim.lr=5e-7 \
+-        actor_rollout_ref.model.use_remove_padding=True \
+-        actor_rollout_ref.actor.ppo_mini_batch_size=128 \
+-        actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=2 \
+-        actor_rollout_ref.actor.use_kl_loss=False \
+-        actor_rollout_ref.actor.kl_loss_coef=0 \
+-        actor_rollout_ref.actor.kl_loss_type=low_var_kl \
+-        actor_rollout_ref.actor.entropy_coeff=0 \
+-        actor_rollout_ref.actor.ulysses_sequence_parallel_size=1 \
+-        actor_rollout_ref.model.enable_gradient_checkpointing=True \
+-        actor_rollout_ref.actor.fsdp_config.param_offload=False \
+-        actor_rollout_ref.actor.fsdp_config.optimizer_offload=False \
+-        actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=2 \
+-        actor_rollout_ref.rollout.tensor_model_parallel_size=1 \
+-        actor_rollout_ref.rollout.name=vllm \
+-        actor_rollout_ref.rollout.engine_kwargs.vllm.disable_mm_preprocessor_cache=False \
+-        actor_rollout_ref.rollout.gpu_memory_utilization=0.6 \
+-        actor_rollout_ref.rollout.enable_chunked_prefill=False \
+-        actor_rollout_ref.rollout.enforce_eager=False \
+-        actor_rollout_ref.rollout.free_cache_engine=True \
+-        actor_rollout_ref.rollout.n=5 \
+-        actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=2 \
+-        actor_rollout_ref.ref.fsdp_config.param_offload=True \
+-        actor_rollout_ref.rollout.max_model_len=8192 \
+-        actor_rollout_ref.rollout.max_num_batched_tokens=8192 \
+-        algorithm.use_kl_in_reward=False \
+-        custom_reward_function.path=/path/to/verl/examples/reward_function/hb_omnisapiens_v1.py \
+-        custom_reward_function.name=human_behaviour_compute_score_batch \
+-        reward_model.reward_manager=batch \
+-        trainer.critic_warmup=0 \
+-        trainer.logger='["console","wandb"]' \
+-        trainer.project_name='human_behavior_atlas' \
+-        trainer.experiment_name='grpo_hba' \
+-        trainer.n_gpus_per_node=4 \
+-        trainer.nnodes=1 \
+-        trainer.save_freq=50 \
+-        trainer.val_before_train=False \
+-        trainer.val_only=False \
+-        trainer.validation_data_dir=/path/to/data/grpo \
+-        trainer.test_freq=50 \
+-        trainer.total_epochs=5 \
+-        trainer.advantage_save_dir=/path/to/data/grpo/advantages \
+-        trainer.advantage_plot_freq=15 $@ \
+-        trainer.default_local_dir=/path/to/data/grpo
+\ No newline at end of file
++echo "GRPO training completed!"
+diff --git a/verl/trainer/main_ppo.py b/verl/trainer/main_ppo.py
+index 4baeb1dc..19e5f3a5 100644
+--- a/verl/trainer/main_ppo.py
++++ b/verl/trainer/main_ppo.py
+@@ -380,14 +380,30 @@ def create_rl_sampler(data_config, dataset, split: str = "train", *, world_size:
+         print(f"Creating our modality sampler for split: {split}")
+         # by_sig is actually the collation of dataset indices grouped by their modality signature
+         by_sig: Dict[str, List[int]] = {}
+-        # essentially getting "modality_signature" from the jsonl dataset
+-        for i in range(len(dataset)):
+-            row = dataset.dataframe[i] if hasattr(dataset, "dataframe") else dataset[i]
+-            sig = row.get("modality_signature")
+-            if sig is None:
+-                print(f"[WARNING] Row {i} missing 'modality_signature'. Skipping.")
+-                continue
+-            by_sig.setdefault(sig, []).append(i)
++
++        # Fast path for lazy-loaded binary (embedded-bytes) parquet: read ONLY the
++        # lightweight modality_signature column via pyarrow instead of decoding every
++        # row's media through __getitem__ (which would be catastrophically slow / OOM).
++        if getattr(dataset, "_use_lazy", False):
++            import pyarrow.parquet as pq
++            global_idx = 0
++            for f in dataset._lazy_file_paths:
++                sigs = pq.read_table(f, columns=["modality_signature"]).column("modality_signature").to_pylist()
++                for sig in sigs:
++                    if sig is not None:
++                        by_sig.setdefault(sig, []).append(global_idx)
++                    global_idx += 1
++            print(f"[ModalitySampler] Built indices from {len(dataset._lazy_file_paths)} files, {global_idx} rows")
++        else:
++            # String-path parquet / jsonl: modality_signature is available on the
++            # in-memory HF dataframe (or via __getitem__ as a fallback).
++            for i in range(len(dataset)):
++                row = dataset.dataframe[i] if hasattr(dataset, "dataframe") else dataset[i]
++                sig = row.get("modality_signature")
++                if sig is None:
++                    print(f"[WARNING] Row {i} missing 'modality_signature'. Skipping.")
++                    continue
++                by_sig.setdefault(sig, []).append(i)
+ 
+         # batch_size = mb_cfg.get("batch_size", data_config.get(
+         #     "train_batch_size" if split=="train" else "val_batch_size"
+diff --git a/verl/utils/dataset/audio_utils.py b/verl/utils/dataset/audio_utils.py
+index 37db4b06..f16f2d33 100644
+--- a/verl/utils/dataset/audio_utils.py
++++ b/verl/utils/dataset/audio_utils.py
+@@ -13,16 +13,18 @@
+ # limitations under the License.
+ 
+ from typing import Tuple, Union
++import io
+ import torch
+ import torchaudio
+ 
+ def process_audio(
+-    audio: Union[str, dict],
++    audio: Union[str, bytes, dict],
+     processor=None,
+     max_seconds: float = 10  # keep audio to this many seconds max
+ ) -> Tuple[torch.Tensor, int]:
+     """
+     Load audio, convert to mono, resample, and clip to max_seconds.
++    Supports file paths (str) and embedded bytes.
+     """
+     if isinstance(audio, dict):
+         audio_path = audio.get("audio", audio)
+@@ -30,8 +32,23 @@ def process_audio(
+         audio_path = audio
+ 
+     try:
+-        # Load
+-        audio_data, original_sr = torchaudio.load(audio_path)
++        # Load — handle both file paths and raw bytes
++        if isinstance(audio_path, bytes):
++            import numpy as np
++            import scipy.io.wavfile as wav
++            buf = io.BytesIO(audio_path)
++            original_sr, audio_np = wav.read(buf)
++            if audio_np.dtype == np.int16:
++                audio_np = audio_np.astype(np.float32) / 32768.0
++            elif audio_np.dtype == np.int32:
++                audio_np = audio_np.astype(np.float32) / 2147483648.0
++            elif audio_np.dtype != np.float32:
++                audio_np = audio_np.astype(np.float32)
++            if audio_np.ndim > 1:
++                audio_np = audio_np.mean(axis=1)
++            audio_data = torch.from_numpy(audio_np).unsqueeze(0)  # [1, samples]
++        else:
++            audio_data, original_sr = torchaudio.load(audio_path)
+ 
+         # Resample if needed
+         if processor and hasattr(processor, 'feature_extractor') and hasattr(processor.feature_extractor, 'sampling_rate'):
+@@ -60,7 +77,6 @@ def process_audio(
+             # ValueError("Audio was processed")
+ 
+             if audio_data.shape[0] > max_samples:
+-                print("Clipping audio to max_seconds")
+                 audio_data = audio_data[:max_samples]
+ 
+         return audio_data, target_sr
+diff --git a/verl/utils/dataset/count_mm_tokens.py b/verl/utils/dataset/count_mm_tokens.py
+new file mode 100644
+index 00000000..52c0fd29
+--- /dev/null
++++ b/verl/utils/dataset/count_mm_tokens.py
+@@ -0,0 +1,107 @@
++from typing import Dict, Any, Optional
++
++MEDIA_MARKER_STRINGS = [
++            "<image>", "<video>", "<audio>",
++            "<|vision_start|>", "<|vision_end|>",
++            "<|video_start|>", "<|video_end|>",
++            "<|image_start|>", "<|image_end|>",
++            "<|audio_start|>", "<|audio_end|>",
++        ]
++
++def get_media_token_ids(tokenizer=None):
++    _vocab = tokenizer.get_vocab()
++    _media_token_ids = {k: tokenizer.convert_tokens_to_ids(k)
++            for k in MEDIA_MARKER_STRINGS if k in _vocab}
++    
++    return _media_token_ids
++
++def count_grid_tokens(grid_thw):
++    """Sum product(T*H*W) over grids; robust to tensor/list/tuple nesting."""
++    if grid_thw is None:
++        return 0
++    arr = grid_thw
++    if hasattr(arr, "cpu"):  # torch tensor
++        arr = arr.cpu().numpy().tolist()
++    if isinstance(arr, (list, tuple)) and arr and not isinstance(arr[0], (list, tuple)):
++        arr = [arr]
++    total = 0
++    for g in arr or []:
++        prod = 1
++        for x in g:
++            try:
++                prod *= int(x)
++            except Exception:
++                prod *= int(float(x))
++        total += int(prod)
++    return int(total)
++
++def count_placeholders(input_ids_1d, _media_token_ids):
++    counts = {"image_ph": 0, "video_ph": 0, "audio_ph": 0, "vision_start": 0, "vision_end": 0}
++    # add any found ids to buckets
++    idset = set(input_ids_1d.tolist())
++    # coarse buckets
++    if "<image>" in _media_token_ids:  counts["image_ph"] += input_ids_1d.tolist().count(_media_token_ids["<image>"])
++    if "<video>" in _media_token_ids:  counts["video_ph"] += input_ids_1d.tolist().count(_media_token_ids["<video>"])
++    if "<audio>" in _media_token_ids:  counts["audio_ph"] += input_ids_1d.tolist().count(_media_token_ids["<audio>"])
++    if "<|vision_start|>" in _media_token_ids:
++        counts["vision_start"] += input_ids_1d.tolist().count(_media_token_ids["<|vision_start|>"])
++    if "<|vision_end|>" in _media_token_ids:
++        counts["vision_end"] += input_ids_1d.tolist().count(_media_token_ids["<|vision_end|>"])
++    return counts
++
++# --- END: per-sample modality token breakdown ---
++
++def compute_modality_token_breakdown(
++    model_inputs: Dict[str, Any],
++    tokenizer,
++    row_dict: Dict[str, Any],
++) -> Dict[str, Any]:
++    """
++    Compute a clean, comparable budget breakdown for one sample:
++      - input_ids_len: total text tokens (incl. placeholders)
++      - text_tokens_est: input_ids minus placeholder/control tokens
++      - placeholders: counts by type (image/video/audio/vision_start/vision_end)
++      - image_kv_tokens_est / video_kv_tokens_est: grid-based visual token estimates
++      - audio_secs: summed seconds from provided audio arrays (if present in row_dict['multi_modal_data'])
++    """
++    media_token_ids = get_media_token_ids(tokenizer)
++
++    # visual KV-token estimates via grids
++    image_kv_tokens = count_grid_tokens(model_inputs.get("image_grid_thw"))
++    video_kv_tokens = count_grid_tokens(model_inputs.get("video_grid_thw"))
++
++    # peek input_ids BEFORE popping them
++    ids = model_inputs.get("input_ids")
++
++    # print("Ids are", ids)
++
++    if ids is not None and len(ids) > 0:
++        ids1d = ids[0]
++        ph_counts = count_placeholders(ids1d, media_token_ids)
++        input_ids_len = int(len(ids1d))
++        media_placeholder_total = int(sum(ph_counts.values()))
++        text_token_est = int(input_ids_len - media_placeholder_total)
++    else:
++        ph_counts = {"image_ph": 0, "video_ph": 0, "audio_ph": 0, "vision_start": 0, "vision_end": 0}
++        input_ids_len = 0
++        text_token_est = 0
++
++    # audio proxy: total seconds from multi_modal_data["audio"] = [(np_array, sr), ...]
++    audio_secs_total = 0.0
++    mmd = row_dict.get("multi_modal_data") or {}
++    for item in (mmd.get("audio") or []):
++        try:
++            arr, sr = item
++            audio_secs_total += float(len(arr)) / float(sr)
++        except Exception:
++            # ignore malformed entries
++            pass
++
++    return {
++        "input_ids_len": int(input_ids_len),
++        "text_tokens_est": int(text_token_est),
++        "placeholders": {k: int(v) for k, v in ph_counts.items()},
++        "image_kv_tokens_est": int(image_kv_tokens),
++        "video_kv_tokens_est": int(video_kv_tokens),
++        "audio_secs": float(round(audio_secs_total, 6)),
++    }
+\ No newline at end of file
+diff --git a/verl/utils/dataset/rl_dataset.py b/verl/utils/dataset/rl_dataset.py
+index 013168b0..0a596073 100644
+--- a/verl/utils/dataset/rl_dataset.py
++++ b/verl/utils/dataset/rl_dataset.py
+@@ -15,6 +15,7 @@
+ # limitations under the License.
+ 
+ import copy
++import logging
+ import os
+ import re
+ from collections import defaultdict
+@@ -29,8 +30,26 @@ from transformers import PreTrainedTokenizer, ProcessorMixin
+ import warnings
+ import verl.utils.torch_functional as verl_F
+ from verl.utils.model import compute_position_id_with_mask
+-import os, warnings
++import time, os, math, warnings
++from verl.utils.dataset.count_mm_tokens import compute_modality_token_breakdown
+ 
++logger = logging.getLogger(__name__)
++
++def _tok_est_from_hw(H, W):
++    # 28x28 -> 1 "visual token" heuristic
++    return math.ceil(H/28) * math.ceil(W/28)
++
++def _sec_from_array(arr, sr):
++    try:
++        return round(len(arr) / float(sr), 3)
++    except Exception:
++        return "?"
++
++def _p99(xs):
++    xs = sorted(xs)
++    if not xs: return 0
++    k = int(0.99*(len(xs)-1))
++    return xs[k]
+ 
+ def assert_homogeneous(batch_list: List[Dict[str, Any]]):
+     sigs = {b.get("modality_signature") for b in batch_list}
+@@ -51,7 +70,7 @@ def collate_fn(data_list: list[dict]) -> dict:
+     """
+     # data list is the batch list
+     # NOTE: we assert homogeneous if the modality signatures are not homogeneous
+-    assert_homogeneous(data_list) # assert if not homogeneous
++    # assert_homogeneous(data_list) # assert if not homogeneous
+ 
+     tensors = defaultdict(list)
+     non_tensors = defaultdict(list)
+@@ -124,6 +143,7 @@ class RLHFDataset(Dataset):
+         self.return_full_prompt = config.get("return_full_prompt", False)
+         self.truncation = config.get("truncation", "error")
+ 
++        # TODO: Check whether this is true
+         self.filter_overlong_prompts = config.get("filter_overlong_prompts", True)
+         if isinstance(data_files, str):
+             self.base_dir = os.path.dirname(os.path.abspath(data_files))
+@@ -162,30 +182,51 @@ class RLHFDataset(Dataset):
+         for i, parquet_file in enumerate(data_files):
+             self.data_files[i] = copy_to_local(src=parquet_file, cache_dir=self.cache_dir, use_shm=self.use_shm)
+ 
++    @staticmethod
++    def _detect_binary_media(parquet_file: str) -> bool:
++        """Check if a parquet file has binary (embedded bytes) media columns."""
++        try:
++            import pyarrow.parquet as pq
++            schema = pq.read_schema(parquet_file)
++            for field in schema:
++                if field.name in ("audios", "videos", "images"):
++                    type_str = str(field.type)
++                    if "binary" in type_str:
++                        return True
++        except Exception:
++            pass
++        return False
++
+     def _read_files_and_tokenize(self):
++        # Check if first parquet file has binary media — use lazy loading if so
++        first_parquet = next((f for f in self.data_files if f.endswith(".parquet")), None)
++        if first_parquet and self._detect_binary_media(first_parquet):
++            self._read_files_lazy()
++            return
++
+         dataframes = []
+ 
+-        features = datasets.Features({
++        # Features for JSONL / string-path parquet files
++        features_string_media = datasets.Features({
+             "problem": datasets.Value("string"),
+             "answer":  datasets.Value("string"),
+             "images":  datasets.Sequence(datasets.Value("string")),
+             "videos":  datasets.Sequence(datasets.Value("string")),
+-            "audios":  datasets.Sequence(datasets.Value("string")),  # <- force list of strings
++            "audios":  datasets.Sequence(datasets.Value("string")),
+             "dataset": datasets.Value("string"),
+             "task": datasets.Value("string"),
+             "class_label": datasets.Value("string"),
+             "texts":   datasets.Sequence(datasets.Value("string")),
+             "modality_signature": datasets.Value("string"),
+-            "ext_video_feats": datasets.Sequence(datasets.Value("string")),  # <- optional, default []
+-            "ext_audio_feats": datasets.Sequence(datasets.Value("string")),  # <- optional, default []
++            "ext_video_feats": datasets.Sequence(datasets.Value("string")),
++            "ext_audio_feats": datasets.Sequence(datasets.Value("string")),
+         })
+ 
+         for parquet_file in self.data_files:
+-            # read parquet files and cache
+             if parquet_file.endswith(".parquet"):
+-                dataframe = datasets.load_dataset("parquet", data_files=parquet_file, features=features)["train"]
++                dataframe = datasets.load_dataset("parquet", data_files=parquet_file, features=features_string_media)["train"]
+             elif parquet_file.endswith(".json") or parquet_file.endswith(".jsonl"):
+-                dataframe = datasets.load_dataset("json", data_files=parquet_file, features=features)["train"]
++                dataframe = datasets.load_dataset("json", data_files=parquet_file, features=features_string_media)["train"]
+             else:
+                 raise ValueError(f"Unsupported file format: {parquet_file}. Only .parquet, .json, .jsonl are supported.")
+             dataframes.append(dataframe)
+@@ -196,6 +237,97 @@ class RLHFDataset(Dataset):
+         # PROCESSING THE DATAFRAME for TRAINING
+         self.dataframe = self.maybe_filter_out_long_prompts(self.dataframe)
+ 
++    # Columns that are lightweight (text/metadata) vs heavy (binary media)
++    _LIGHT_COLUMNS = ['problem', 'answer', 'dataset', 'modality_signature', 'task',
++                      'class_label', 'ext_video_feats', 'ext_audio_feats']
++    _BINARY_COLUMNS = ['audios', 'videos', 'images']
++
++    def _read_files_lazy(self):
++        """Lazy loading for embedded binary parquet — only reads metadata upfront."""
++        import pyarrow.parquet as pq
++
++        parquet_files = [f for f in self.data_files if f.endswith(".parquet")]
++        self._lazy_file_paths = parquet_files
++        self._lazy_file_row_counts = []
++        self._lazy_cumulative_rows = []
++        self._lazy_meta_cache = {}   # lightweight text columns only
++        self._lazy_cache_max = 0     # 0 = cache all files (text columns are small)
++
++        total_rows = 0
++        for f in parquet_files:
++            n = pq.ParquetFile(f).metadata.num_rows
++            self._lazy_cumulative_rows.append(total_rows)
++            self._lazy_file_row_counts.append(n)
++            total_rows += n
++
++        self._lazy_total_rows = total_rows
++        self._use_lazy = True
++
++        print(f"[LazyLoad] {len(parquet_files)} parquet files, {total_rows} total rows (lazy)")
++
++    def _lazy_get_row(self, idx: int) -> dict:
++        """Get a single row by index from lazy-loaded parquet files.
++
++        Reads lightweight text columns from a cached DataFrame (small, kept in memory).
++        Reads binary media columns on demand for the single row (avoids loading
++        entire file of binary data).
++        """
++        import pyarrow.parquet as pq
++
++        # Binary search for file
++        lo, hi = 0, len(self._lazy_cumulative_rows) - 1
++        while lo < hi:
++            mid = (lo + hi + 1) // 2
++            if self._lazy_cumulative_rows[mid] <= idx:
++                lo = mid
++            else:
++                hi = mid - 1
++        file_idx = lo
++        local_row = idx - self._lazy_cumulative_rows[file_idx]
++        filepath = self._lazy_file_paths[file_idx]
++
++        # Cache lightweight columns (text/metadata) — very small, cache all files
++        if file_idx not in self._lazy_meta_cache:
++            if self._lazy_cache_max > 0 and len(self._lazy_meta_cache) >= self._lazy_cache_max:
++                oldest = next(iter(self._lazy_meta_cache))
++                del self._lazy_meta_cache[oldest]
++            # Read only text columns — fast, ~1MB per file instead of ~500MB
++            schema = pq.read_schema(filepath)
++            available_light = [c for c in self._LIGHT_COLUMNS if c in schema.names]
++            self._lazy_meta_cache[file_idx] = pq.read_table(filepath, columns=available_light)
++
++        # Get text/metadata from cache
++        meta_table = self._lazy_meta_cache[file_idx]
++        row_dict = {}
++        for col in meta_table.column_names:
++            row_dict[col] = meta_table.column(col)[local_row].as_py()
++
++        # Read binary columns from a separately cached full DataFrame
++        # (kept in an LRU cache of 4 files to avoid constant reloading)
++        if not hasattr(self, '_lazy_binary_cache'):
++            self._lazy_binary_cache = {}
++            self._lazy_binary_cache_max = 4
++
++        if file_idx not in self._lazy_binary_cache:
++            if len(self._lazy_binary_cache) >= self._lazy_binary_cache_max:
++                oldest = next(iter(self._lazy_binary_cache))
++                del self._lazy_binary_cache[oldest]
++            import pandas as pd
++            schema = pq.read_schema(filepath)
++            available_binary = [c for c in self._BINARY_COLUMNS if c in schema.names]
++            if available_binary:
++                self._lazy_binary_cache[file_idx] = pd.read_parquet(filepath, columns=available_binary)
++            else:
++                self._lazy_binary_cache[file_idx] = None
++
++        binary_df = self._lazy_binary_cache[file_idx]
++        if binary_df is not None:
++            binary_row = binary_df.iloc[local_row]
++            for col in binary_df.columns:
++                row_dict[col] = binary_row[col]
++
++        return row_dict
++
+     def maybe_filter_out_long_prompts(self, dataframe: datasets.Dataset = None):
+         # NOTE: filter out too long prompts, because the prompts can become very long
+         # when the audio is appended.
+@@ -210,6 +342,7 @@ class RLHFDataset(Dataset):
+             audio_key = self.audio_key
+ 
+             if processor is not None:
++                # print(f"KEANE: PROCESSOR FOUND")
+                 from verl.utils.dataset.vision_utils import process_image, process_video
+                 from verl.utils.dataset.audio_utils import process_audio
+ 
+@@ -229,7 +362,10 @@ class RLHFDataset(Dataset):
+                         processor_kwargs["videos"] = videos
+ 
+                     if "audio" in self.modalities and audio_key in doc and doc.get(audio_key, None) is not None and len(doc[audio_key]) > 0:
+-      
++                        # processing of audio
++                        # print(f"KEANE: Processing audio within rl dataset file")
++                        # audios = [process_audio(audio, processor) for audio in doc[audio_key]]
++                        # processor_kwargs["audio"] = audios
+ 
+                         # PATCH
+                         audios = []
+@@ -238,13 +374,18 @@ class RLHFDataset(Dataset):
+                             audio_path = os.path.join(self.base_dir, audio) if isinstance(audio, str) else audio
+                             audio_data, sampling_rate = process_audio(audio_path, self.processor)
+                             audio_tuples.append((audio_data, sampling_rate))
++                            # audios.append(audio_data.numpy())  # Convert to numpy array for Whisper
+                             audios.append(audio_data.detach().cpu().numpy().astype("float32"))
+ 
+                         processor_kwargs["audio"] = audios  # Pass numpy arrays to processor
+-
++                    # TODO: cannot process the audio inputs
++                    # print(f"KEANE: Processor class is {processor.__class__.__name__}")
++                    # print(f"KEANE: Printing the processor_kwargs, {processor_kwargs}")
++                    # Assume that all are in tensors already, hence there is no return_tensors = "pt"
+                     return len(processor(**processor_kwargs)["input_ids"][0])
+ 
+             else:
++                # print(f"KEANE: PROCESSOR NOT FOUND")
+                 def doc2len(doc) -> int:
+                     return len(tokenizer.apply_chat_template(doc[prompt_key], add_generation_prompt=True))
+ 
+@@ -267,6 +408,8 @@ class RLHFDataset(Dataset):
+             print(r"old dataloader ckpt file is used, please train from scratch for better ckpt performance")
+ 
+     def __len__(self):
++        if getattr(self, '_use_lazy', False):
++            return self._lazy_total_rows
+         return len(self.dataframe)
+ 
+     def _build_messages(self, example: dict):
+@@ -306,10 +449,16 @@ class RLHFDataset(Dataset):
+                 # NOTE: Apppending the <image>, <video>, <audio> tags when they are missing
+                 if image_tag_count < image_count:
+                     content = "<image>" * (image_count - image_tag_count) + content
++                    logger.warning("<image> tag count is less than image count, adding missing <image> tags."
++                                   " content: %s", content)
+                 if video_tag_count < video_count:
+                     content = "<video>" * (video_count - video_tag_count) + content
++                    logger.warning("<video> tag count is less than video count, adding missing <video> tags."
++                                 " content: %s", content)
+                 if audio_tag_count < audio_count:
+                     content = "<audio>" * (audio_count - audio_tag_count) + content
++                    logger.warning("<audio> tag count is less than audio count, adding missing <audio> tags."
++                                   " content: %s", content)
+ 
+                 content_list = []
+                 # Build regex pattern based on enabled modalities
+@@ -322,7 +471,7 @@ class RLHFDataset(Dataset):
+                     tag_patterns.append("<audio>")
+                 
+                 # NOTE: Denote the different patterns based on the tag.
+-
++                # TODO: Double check what this does
+                 if tag_patterns:
+                     pattern = "(" + "|".join(tag_patterns) + ")"
+                     segments = re.split(pattern, content)
+@@ -360,10 +509,14 @@ class RLHFDataset(Dataset):
+         """
+         Note that we also return the raw_input_ids so that it can be combined with other chat template
+         PROCESSING ONE ROW AT A TIME
++        Supports both HF Dataset (self.dataframe) and lazy parquet loading.
+         """
+-        row_dict: dict = self.dataframe[item]
++        if getattr(self, '_use_lazy', False):
++            row_dict: dict = self._lazy_get_row(item)
++        else:
++            row_dict: dict = self.dataframe[item]
+ 
+-        # NOTE: save the modality signature to this; 
++        # NOTE: save the modality signature to this;
+         sig = row_dict.get("modality_signature", None)
+ 
+         if not isinstance(sig, str) or len(sig.strip()) == 0:
+@@ -390,21 +543,33 @@ class RLHFDataset(Dataset):
+             if item is None:
+                 row_dict[key] = []
+ 
++        # create the video_ext and audio ext paths:
++        # TODO: This currently works for only the fist video within the .pt list
++        # i.e. "ext_video_feats": [path1, path2, ...], we only take the first one
+         video_rel_path = row_dict.get('ext_video_feats', None)
+-        if video_rel_path:
++        if video_rel_path and len(video_rel_path) > 0:
+             video_rel_path = video_rel_path[0]
+-            row_dict["ext_video_feats_path"] = os.path.join(self.base_dir, video_rel_path)
++            if isinstance(video_rel_path, str):
++                row_dict["ext_video_feats_path"] = os.path.join(self.base_dir, video_rel_path)
++            else:
++                row_dict["ext_video_feats_path"] = video_rel_path  # bytes
+         else:
+             row_dict["ext_video_feats_path"] = None
+-        
++
+         audio_rel_path = row_dict.get('ext_audio_feats', None)
+-        if audio_rel_path:
++        if audio_rel_path and len(audio_rel_path) > 0:
+             audio_rel_path = audio_rel_path[0]
+-            row_dict["ext_audio_feats_path"] = os.path.join(self.base_dir, audio_rel_path)
++            if isinstance(audio_rel_path, str):
++                row_dict["ext_audio_feats_path"] = os.path.join(self.base_dir, audio_rel_path)
++            else:
++                row_dict["ext_audio_feats_path"] = audio_rel_path  # bytes
+         else:
+             row_dict["ext_audio_feats_path"] = None
+ 
+-        # NOTE: BUILD_MESSAGES IS CALLED TWICE; FIRST TIME IS TO GET THE LENGTH OF THE RAW PROMPT AND FILTER OUT; PROMPTS THAT DO NOT FIT THE LENGTH; SECOND TIME IS TO BUILD THE MESSAGE TO BE PASSED INTO THE MODEL
++        # NOTE: BUILD_MESSAGES IS CALLED TWICE; 
++        # NOTE: FIRST TIME IS TO GET THE LENGTH OF THE RAW PROMPT AND FILTER OUT 
++        # NOTE: PROMPTS THAT DO NOT FIT THE LENGTH; 
++        # NOTE: SECOND TIME IS TO BUILD THE MESSAGE TO BE PASSED INTO THE MODEL
+ 
+         messages = self._build_messages(row_dict)
+ 
+@@ -419,6 +584,12 @@ class RLHFDataset(Dataset):
+             })
+         model_inputs = {}
+         
++        # NOTE: DEBUGGING
++        dbg = False
++        if dbg:
++            print(f"[getitem] idx=? ds={row_dict.get('dataset')} src={row_dict.get('data_source')} "
++                f"modalities={self.modalities}")
++
+         if self.processor is not None:
+             # THIS CHUNK IS BASICALLY ABOUT PROCESSING ALL THE MODALITIES
+             from verl.utils.dataset.vision_utils import process_image, process_video
+@@ -428,6 +599,9 @@ class RLHFDataset(Dataset):
+                 warnings.filterwarnings("ignore", message="System prompt modified")
+                 raw_prompt = self.processor.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
+ 
++            
++            if dbg:
++                print(f"[prompt] raw_prompt_chars={len(raw_prompt)}")
+ 
+             multi_modal_data = {}
+             processor_kwargs = {"text": [raw_prompt], "return_tensors": "pt"}
+@@ -443,8 +617,14 @@ class RLHFDataset(Dataset):
+                 multi_modal_data["image"] = images
+                 processor_kwargs["images"] = images
+ 
++                if dbg:
++                    print(f"[image] n={len(images)} shapes={[tuple(x.size()) if hasattr(x,'size') else 'np' for x in images]}")
++
++
++            # print(f"KEANE: Videos is next line, current processor_kwargs {processor_kwargs}")
+             if "videos" in self.modalities and self.video_key in row_dict and row_dict.get(self.video_key, None) is not None and len(row_dict[self.video_key]) > 0:
+                 videos = []
++                # print(f"KEANE: GETTING VIDEO {row_dict[self.video_key]}")
+ 
+                 for video in row_dict.get(self.video_key):
+                     video = os.path.join(self.base_dir, video) if isinstance(video, str) else video
+@@ -455,6 +635,14 @@ class RLHFDataset(Dataset):
+                 multi_modal_data["video"] = [video.numpy() for video in videos]
+                 processor_kwargs["videos"] = videos
+ 
++                if dbg:
++                    shapes = [tuple(v.shape) for v in videos]  # [T,3,H,W]
++                    toks = []
++                    for (T, C, H, W) in shapes:
++                        toks.append(_tok_est_from_hw(H, W) * T)
++                    print(f"[video] n={len(videos)} shapes={shapes} est_tokens={toks} "
++                        f"sum_est_tokens={sum(toks)} p99_est={_p99(toks)}")
++
+             if (
+                 "audio" in self.modalities
+                 and self.audio_key in row_dict
+@@ -463,24 +651,69 @@ class RLHFDataset(Dataset):
+             ):
+                 audios_np = []
+                 audios_np_sr = []
++                audio_tuples_debug = []  # keep tensors only for debugging
++                audio_secs = []
+ 
+                 for audio in row_dict[self.audio_key]:
+                     audio_path = os.path.join(self.base_dir, audio) if isinstance(audio, str) else audio
+                     audio_tensor, sr = process_audio(audio_path, self.processor)
+ 
++                    # Debug only
++                    audio_tuples_debug.append((audio_tensor, sr))
++
+                     # What BOTH HF and vLLM need:
+                     arr = audio_tensor.detach().cpu().numpy().astype("float32")
+                     audios_np.append(arr)
+                     audios_np_sr.append((arr, int(sr)))
++                    audio_secs.append(_sec_from_array(arr, sr))
+ 
+                 # HF (Whisper / Omni processor) path
+                 multi_modal_data["audio"] = audios_np_sr  # Store numpy arrays (it should not accept tuples)
+ 
+                 processor_kwargs["audio"] = audios_np  # Pass numpy arrays to processor
+ 
+-            model_inputs = self.processor(**processor_kwargs)
++                if dbg:
++                    print(f"[audio] n={len(audios_np)} secs_each={audio_secs} total_secs≈{round(sum([s for s in audio_secs if s!='?']),3)}")
++
++            # NOTE: Original CODE PROCESSING    
++            # TODO: Please check whether the model is processing the "audio" correctly, the processor that we are using is qwen 2.5 OMNI
++            # print(f"KEANE: Processing multimodal data with processor {self.processor.__class__.__name__} ")
++            # print(f"KEANE: Processor kwargs: {processor_kwargs}")
++            # model_inputs = self.processor(**processor_kwargs)
+ 
++            # NOTE: Replacement code
++            # try:
++            t0 = time.time()
++            # processing the modalities:
++            # # TODO_DEBUG; increase token limits for processor
++            # processor_kwargs["max_length"] = 10000
+ 
++            model_inputs = self.processor(**processor_kwargs)
++            dt = (time.time() - t0)*1000
++            if dbg:
++                # lengths after processor/tokenizer
++                ids = model_inputs.get("input_ids")
++                lens = [len(x) for x in ids] if ids is not None else []
++                print(f"[processor] ok in {dt:.1f}ms; input_ids lens={lens} "
++                    f"min/med/max={ (min(lens) if lens else '-')} / "
++                    f"{ (sorted(lens)[len(lens)//2] if lens else '-') } / "
++                    f"{ (max(lens) if lens else '-') }")
++            # except Exception as e:
++            #     print(f"[processor][ERROR] {type(e).__name__}: {e}")
++            #     # helpful context dump (small)
++            #     print(f"[processor][ctx] has_video={videos is not None} "
++            #         f"n_vid={len(videos) if videos is not None else 0} "
++            #         f"n_audio={len(audio_secs) if audio_secs else 0} "
++            #         f"raw_prompt_chars={len(raw_prompt)}")
++            #     raise
++
++            row_dict["modality_token_breakdown"] = compute_modality_token_breakdown(
++                                            model_inputs=model_inputs,
++                                            tokenizer=self.tokenizer,
++                                            row_dict=row_dict,           # for audio seconds
++                                        )
++
++            # NOTE: all text should be processed by self.processor()
+             input_ids = model_inputs.pop("input_ids")
+             attention_mask = model_inputs.pop("attention_mask")
+ 
+@@ -504,6 +737,8 @@ class RLHFDataset(Dataset):
+             input_ids = model_inputs.pop("input_ids")
+             attention_mask = model_inputs.pop("attention_mask")
+         
++        #TODO_DEBUG double check the prompt length here as it may lead to error
++        #TODO_DEBUG it may need to be set higher, to 4096 or something
+         input_ids, attention_mask = verl_F.postprocess_data(
+             input_ids=input_ids,
+             attention_mask=attention_mask,
+@@ -516,6 +751,9 @@ class RLHFDataset(Dataset):
+         if self.processor is not None and "Qwen2VLImageProcessor" in self.processor.image_processor.__class__.__name__:
+             from verl.models.transformers.qwen2_vl import get_rope_index
+             
++            # NOTE: printing out whether this runs
++            # print("KEANE: Running getting the rope index of input ids")
++            
+             # NOTE: OBTAIN ROPE of rotary positional embeddings. ROPE encodes position by rotating components of query/key vectors
+             # This is just for to get relative position in terms of angular differences etc.
+             position_ids = [
+@@ -563,6 +801,9 @@ class RLHFDataset(Dataset):
+         index = row_dict.get("extra_info", {}).get("index", 0)
+         tools_kwargs = row_dict.get("extra_info", {}).get("tools_kwargs", {})
+         interaction_kwargs = row_dict.get("extra_info", {}).get("interaction_kwargs", {})
++        need_tools_kwargs = row_dict.get("extra_info", {}).get("need_tools_kwargs", self.need_tools_kwargs)
++        if need_tools_kwargs and not tools_kwargs:
++            logger.warning("tools_kwargs is empty for index {}, data source: {}", index, row_dict["data_source"])
+         row_dict["index"] = index
+         row_dict["tools_kwargs"] = tools_kwargs
+         row_dict["interaction_kwargs"] = interaction_kwargs
+diff --git a/verl/utils/dataset/vision_utils.py b/verl/utils/dataset/vision_utils.py
+index 854396ae..509d61b8 100644
+--- a/verl/utils/dataset/vision_utils.py
++++ b/verl/utils/dataset/vision_utils.py
+@@ -94,29 +94,35 @@ def process_video(
+         return dummy
+     # --- /PATCH ---
+ 
++    # Handle raw bytes — decode with PyAV, bypass fetch_video
++    if isinstance(video, bytes):
++        import io, numpy as np
++        try:
++            import av
++            container = av.open(io.BytesIO(video))
++            frames = []
++            for frame in container.decode(video=0):
++                frames.append(frame.to_ndarray(format="rgb24"))
++            container.close()
++            if not frames:
++                return torch.zeros((4, 3, 224, 224), dtype=torch.uint8)
++            nf = 4
++            if len(frames) > nf:
++                indices = np.linspace(0, len(frames) - 1, nf, dtype=int)
++                frames = [frames[i] for i in indices]
++            video_tensor = torch.from_numpy(np.stack(frames)).permute(0, 3, 1, 2)
++            return video_tensor
++        except Exception as e:
++            if debug:
++                print(f"[process_video][bytes_error] {e}")
++            return torch.zeros((4, 3, 224, 224), dtype=torch.uint8)
++
+     # Normalize string input → dict
+     if isinstance(video, str):
+-        # Your current defaults (tiny visual budget)
+-        # video = {"type": "video", "video": video,
+-        #          "min_pixels": 32768, "max_pixels": 32768, "nframes": 2}
+-
+-    # Moderate budget
+-        # video = {"type": "video", "video": video,
+-        #         "min_pixels": 49152, "max_pixels": 262144, "nframes": 4}
+         video= {
+             "type": "video", "video": video,
+             "min_pixels": 147456, "max_pixels": 147456, "nframes": 4
+-        }        
+-
+-    #TODO_DEBUG: Changing the pixel budget
+-        # video= {
+-        #     "type": "video", "video": video,
+-        #     "min_pixels": 65536, "max_pixels": 65536, "nframes": 4
+-        # }
+-    
+-    # Most expensive budget
+-    #     video = {"type": "video", "video": video, "min_pixels": 65536, "max_pixels": 524288,
+-    #              "nframes": 4}
++        }
+ 
+     if not isinstance(video, dict) or "video" not in video:
+         raise NotImplementedError("Video format must be dict with key 'video'.")
+diff --git a/verl/workers/fsdp_workers.py b/verl/workers/fsdp_workers.py
+index 0d0134f4..d9edaaea 100644
+--- a/verl/workers/fsdp_workers.py
++++ b/verl/workers/fsdp_workers.py
+@@ -220,6 +220,22 @@ class ActorRolloutRefWorker(Worker, DistProfilerExtension):
+             self.config.ref.log_prob_micro_batch_size //= self.device_mesh.size() // self.ulysses_sequence_parallel_size
+             self.config.ref.log_prob_micro_batch_size_per_gpu = self.config.ref.log_prob_micro_batch_size
+ 
++    @staticmethod
++    def _is_qwen_omni(local_path: str) -> bool:
++        """Detect a Qwen2.5-Omni model by path or by config.json model_type.
++
++        The path-string check alone is fragile (e.g. SFT-merged checkpoints whose
++        directory name does not contain 'Qwen2.5-Omni'); fall back to model_type.
++        """
++        if "Qwen2.5-Omni" in local_path or "qwen_omni" in local_path.lower():
++            return True
++        try:
++            with open(os.path.join(local_path, "config.json")) as _f:
++                mt = json.load(_f).get("model_type", "")
++                return mt in ("qwen2_5_omni_thinker", "qwen2_5_omni")
++        except Exception:
++            return False
++
+     def _build_model_optimizer(
+         self,
+         model_path,
+@@ -264,7 +280,7 @@ class ActorRolloutRefWorker(Worker, DistProfilerExtension):
+             torch_dtype = PrecisionType.to_dtype(torch_dtype)
+ 
+         # override model kwargs
+-        if "Qwen2.5-Omni" in local_path:
++        if self._is_qwen_omni(local_path):
+             from transformers import Qwen2_5OmniThinkerConfig
+             actor_model_config = Qwen2_5OmniThinkerConfig.from_pretrained(
+                 local_path, 
+@@ -300,7 +316,7 @@ class ActorRolloutRefWorker(Worker, DistProfilerExtension):
+ 
+         with init_context(), warnings.catch_warnings():
+             warnings.simplefilter("ignore")
+-            if "Qwen2.5-Omni" in local_path:
++            if self._is_qwen_omni(local_path):
+                 from transformers import Qwen2_5OmniThinkerForConditionalGeneration
+                 actor_module_class = Qwen2_5OmniThinkerForConditionalGeneration
+             elif type(actor_model_config) in AutoModelForVision2Seq._model_mapping.keys():

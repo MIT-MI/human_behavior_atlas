@@ -140,6 +140,18 @@ If you have already cloned the repository without `--recurse-submodules`, initia
 git submodule update --init --recursive
 ```
 
+> **Required (fork / omni path):** the pinned `verl/` submodule does not yet include the
+> HBA **binary-parquet data loader** (lazy decode of embedded audio/video/image bytes,
+> the modality-batching sampler fast-path, and Qwen2.5-Omni model detection). Apply it
+> with the helper script — idempotent, and **no write access to the verl fork is needed**:
+>
+> ```bash
+> bash scripts/setup_verl.sh   # inits the submodule + applies patches/0001-hba-binary-parquet-loader.patch
+> ```
+>
+> Without this, training on the parquet distribution fails with
+> `pyarrow ArrowInvalid: Invalid UTF8 payload`. See [`docs/CODE_STRUCTURE.md`](docs/CODE_STRUCTURE.md) §3.
+
 **2. Create a conda environment:**
 
 ```bash

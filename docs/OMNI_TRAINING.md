@@ -32,6 +32,7 @@ This path needs the **fork**, not upstream verl. Following the main ReadMe Train
 ```bash
 git clone --recurse-submodules -b parquet_dataloader_omni_mirl https://github.com/MIT-MI/human_behavior_atlas.git
 cd human_behavior_atlas
+bash scripts/setup_verl.sh    # apply the binary-parquet loader patch to the pinned verl submodule
 conda create -n verl python==3.12.2 && conda activate verl
 # PyTorch (CUDA 12.6/12.8) per https://pytorch.org
 pip install -r verl/requirements.txt

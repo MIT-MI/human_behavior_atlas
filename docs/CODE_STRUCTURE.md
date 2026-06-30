@@ -85,7 +85,12 @@ first-class support for the **self-contained binary parquet**:
   so SFT-merged checkpoints load the thinker.
 
 > Without these, the binary parquet fails with `pyarrow ArrowInvalid: Invalid UTF8 payload`.
-> These live in the `DDVD233/verl @ hba_public_release` submodule.
+>
+> **Where they live:** the `verl/` submodule is pinned to `DDVD233/verl @ hba_public_release`,
+> which does **not** yet include these changes. They are carried in this repo as
+> `patches/0001-hba-binary-parquet-loader.patch` and applied on top of the pinned submodule
+> by `scripts/setup_verl.sh` (run once after `git submodule update --init`). No write access
+> to the verl fork is required.
 
 ### Data flow (one GRPO step)
 ```

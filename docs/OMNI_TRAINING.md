@@ -17,12 +17,13 @@ recipes that read the Human Behavior Atlas parquet directly.
 
 ```
 human_behavior_atlas/
-├── sft/      # model-agnostic parquet SFT (config_sft.yaml -> Qwen2.5-Omni-7B, arch=omni_thinker)
-├── grpo/     # fork GRPO + TARPO (run_grpo.sh, run_tarpo.sh, reward_function/, format_prompt/)
+├── training/
+│   ├── sft/  # model-agnostic parquet SFT (config_sft.yaml -> Qwen2.5-Omni-7B, arch=omni_thinker)
+│   └── rl/   # fork GRPO + TARPO (run_grpo.sh, run_tarpo.sh, reward_function/, format_prompt/)
 └── verl/     # submodule → DDVD233/verl (omni fork)
 ```
 
-The classification / QA / BAM omni trainers from `main` are retained under `sft/`.
+The classification / QA / BAM omni trainers from `main` are retained under `training/sft/`.
 
 ## Environment (fork verl)
 
@@ -35,18 +36,18 @@ conda create -n verl python==3.12.2 && conda activate verl
 # PyTorch (CUDA 12.6/12.8) per https://pytorch.org
 pip install -r verl/requirements.txt
 pip install "vllm[audio]==0.10.2"
-pip install -r grpo/requirements_grpo.txt
+pip install -r training/rl/requirements_grpo.txt
 # FlashAttention from source (see main ReadMe), then:
 export PYTHONPATH="$(pwd)/verl:$PYTHONPATH"
 ```
 
-SFT alone (no verl) can also use the lighter env from `sft/requirements_accelerate.txt`,
+SFT alone (no verl) can also use the lighter env from `training/sft/requirements_accelerate.txt`,
 but the Omni model class requires a transformers build that ships `Qwen2_5Omni*`.
 
 ## SFT (Qwen2.5-Omni-7B)
 
 ```bash
-cd sft
+cd training/sft
 HBA_DATA_DIR=/path/to/human_behavior_atlas_v2 ./run_sft.sh 4    # config_sft.yaml = omni
 ```
 `config_sft.yaml` sets `model.arch: omni_thinker`, `modalities: "audio,videos"`,
@@ -65,7 +66,7 @@ python merge_lora.py --arch omni_thinker --base_model Qwen/Qwen2.5-Omni-7B \
 
 ```bash
 conda activate verl
-cd grpo
+cd training/rl
 HBA_DATA_DIR=/path/to/human_behavior_atlas_v2 ./run_grpo.sh 4     # GRPO
 HBA_DATA_DIR=/path/to/human_behavior_atlas_v2 ./run_tarpo.sh 4    # TARPO (fork-only)
 ```

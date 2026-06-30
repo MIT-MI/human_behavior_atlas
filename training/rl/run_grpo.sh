@@ -25,22 +25,22 @@ export RAY_memory_usage_threshold=0.98
 export RAY_NUM_CPUS_PER_TASK=4
 
 GRPO_DIR="$(cd "$(dirname "$0")" && pwd)"
-HBA_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+HBA_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 export PYTHONPATH="${HBA_ROOT}/verl:${PYTHONPATH}"
 cd "$HBA_ROOT"
 
-MODEL_PATH=${MODEL_PATH:-"${HBA_ROOT}/sft/checkpoints/sft_qwen_omni_hba_merged"}
+MODEL_PATH=${MODEL_PATH:-"${HBA_ROOT}/training/sft/checkpoints/sft_qwen_omni_hba_merged"}
 
 # Auto-merge latest SFT checkpoint into the full Omni model if not present.
 if [ ! -f "$MODEL_PATH/config.json" ]; then
-    SFT_CKPT_DIR="${HBA_ROOT}/sft/checkpoints/sft_qwen_omni_hba"
+    SFT_CKPT_DIR="${HBA_ROOT}/training/sft/checkpoints/sft_qwen_omni_hba"
     LATEST_CKPT=$(ls -d ${SFT_CKPT_DIR}/step_* 2>/dev/null | sed 's/.*step_//' | sort -n | tail -1 | xargs -I{} echo "${SFT_CKPT_DIR}/step_{}")
     if [ -z "$LATEST_CKPT" ]; then
-        echo "ERROR: No SFT checkpoint in ${SFT_CKPT_DIR}. Run sft/run_sft.sh first."
+        echo "ERROR: No SFT checkpoint in ${SFT_CKPT_DIR}. Run training/sft/run_sft.sh first."
         exit 1
     fi
     echo "[INFO] Auto-merging SFT checkpoint: $LATEST_CKPT -> $MODEL_PATH"
-    python3 "${HBA_ROOT}/sft/merge_lora.py" --arch omni_thinker \
+    python3 "${HBA_ROOT}/training/sft/merge_lora.py" --arch omni_thinker \
         --base_model "Qwen/Qwen2.5-Omni-7B" \
         --adapter_path "$LATEST_CKPT" --output_path "$MODEL_PATH" || { echo "merge failed"; exit 1; }
 fi
@@ -54,7 +54,7 @@ done
 TRAIN_FILE_LIST="${TRAIN_FILE_LIST%,}]"
 VAL_FILE="${DATA_DIR}/validation-00004-of-00013.parquet"
 
-SAVE_DIR=${SAVE_DIR:-"${HBA_ROOT}/grpo/checkpoints/grpo_qwen_omni_hba"}
+SAVE_DIR=${SAVE_DIR:-"${HBA_ROOT}/training/rl/checkpoints/grpo_qwen_omni_hba"}
 REWARD_FN="${GRPO_DIR}/reward_function/human_behaviour.py"
 FORMAT_PROMPT="${GRPO_DIR}/format_prompt/default.jinja"
 

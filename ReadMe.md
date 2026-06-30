@@ -8,8 +8,10 @@ OmniSapiens 2.0 is a first-of-its-kind foundation model for unified social behav
 
 Together, we hope that HBA and OmniSapiens 2.0 provide a unified ecosystem for advancing socially intelligent AI systems capable of interpretable and robust human behavior understanding.
 
-> 🧩 **`parquet_dataloader` branch:** adds a model-agnostic, **parquet-native SFT + GRPO** pipeline that runs on **upstream [verl](https://github.com/volcengine/verl) `@ main`** — the `verl/` submodule is repointed from the fork, with no `mirl` dependency. `sft/` and `grpo/` are sibling stages. **➡️ See [`PARQUET_TRAINING.md`](PARQUET_TRAINING.md) for setup, configs, and the SFT/GRPO examples.**
-> 🧩 **`parquet_dataloader_omni_mirl` branch:** the **omni / fork** training path — Qwen2.5-Omni-7B SFT (parquet) + **GRPO + TARPO** on the `DDVD233/verl` fork, reading the HBA parquet directly. **➡️ See [`OMNI_TRAINING.md`](OMNI_TRAINING.md).** (For the upstream-verl, vision path, see the `parquet_dataloader` branch.)
+> 🗂️ **Repo layout:** training code lives under [`training/`](training/) — `training/sft/` (supervised fine-tuning) and `training/rl/` (GRPO + TARPO). Evaluation utilities are in [`evaluation/`](evaluation/), extra docs in [`docs/`](docs/). The RL engine is the [`verl/`](verl/) submodule. See **[`docs/CODE_STRUCTURE.md`](docs/CODE_STRUCTURE.md)** for a full map.
+>
+> 🧩 **`parquet_dataloader` branch:** adds a model-agnostic, **parquet-native SFT + GRPO** pipeline that runs on **upstream [verl](https://github.com/volcengine/verl) `@ main`** — the `verl/` submodule is repointed from the fork, with no `mirl` dependency. `training/sft/` and `training/rl/` are sibling stages. **➡️ See [`docs/PARQUET_TRAINING.md`](docs/PARQUET_TRAINING.md) for setup, configs, and the SFT/GRPO examples.**
+> 🧩 **`parquet_dataloader_omni_mirl` branch:** the **omni / fork** training path — Qwen2.5-Omni-7B SFT (parquet) + **GRPO + TARPO** on the `DDVD233/verl` fork, reading the HBA parquet directly. **➡️ See [`docs/OMNI_TRAINING.md`](docs/OMNI_TRAINING.md).** (For the upstream-verl, vision path, see the `parquet_dataloader` branch.)
 
 ---
 
@@ -119,7 +121,7 @@ OmniSapiens-7B 2.0 is a significantly improved foundation model, trained with a 
 
 ## ⚙️ Training
 
-> **`parquet_dataloader` branch:** this branch also provides a lighter, **upstream-verl** training path — a parquet-native, model-agnostic **SFT + GRPO** pipeline under [`sft/`](sft/) and [`grpo/`](grpo/), documented in **[`PARQUET_TRAINING.md`](PARQUET_TRAINING.md)**. The instructions below describe the original fork-based (`v0.5.0.dev`) setup.
+> **`parquet_dataloader` branch:** this branch also provides a lighter, **upstream-verl** training path — a parquet-native, model-agnostic **SFT + GRPO** pipeline under [`training/sft/`](training/sft/) and [`training/rl/`](training/rl/), documented in **[`docs/PARQUET_TRAINING.md`](docs/PARQUET_TRAINING.md)**. The instructions below describe the original fork-based (`v0.5.0.dev`) setup.
 
 ### Installation
 
@@ -198,7 +200,7 @@ cd MathRuler && pip install . && cd ..
 pip install pandas tqdm tenacity anthropic openai wandb
 ```
 
-These are required for `misc_eval_utils/llm_grader/llm_judge_eval.py`, which grades free-form QA outputs using an LLM judge.
+These are required for `evaluation/llm_grader/llm_judge_eval.py`, which grades free-form QA outputs using an LLM judge.
 
 **9. Set up PYTHONPATH:**
 
@@ -228,7 +230,7 @@ SFT training follows a three-stage pipeline. Each stage builds on the previous o
 **Stage 1 — Classification Training**
 
 ```bash
-cd sft
+cd training/sft
 bash run_classification.sh
 ```
 
@@ -261,7 +263,7 @@ Validation behavior differs by dataset type and applies uniformly across **all t
 **QA datasets (IntentQA, MIMEQA, SIQ2)** — Because these tasks require free-form text generation, accuracy cannot be computed with exact string matching. After training, run the LLM judge evaluation script:
 
 ```bash
-cd misc_eval_utils/llm_grader
+cd evaluation/llm_grader
 bash run_llm_judge_eval.sh
 ```
 

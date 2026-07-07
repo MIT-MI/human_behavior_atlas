@@ -18,7 +18,7 @@ Together, we hope that HBA and OmniSapiens 2.0 provide a unified ecosystem for a
 - 🚀 **[Apr 2026] OmniSapiens 2.0 has been accepted to ICML 2026 Main Conference!
 https://openreview.net/pdf?id=MrupCemBMy**
 - 🚀 **[March 2026] All code, models, and benchmark data for the ICLR paper Human Behavior Atlas has been uploaded!**
-- 📄 **[Feb 2026] Preprint on a follow-up paper, OmniSapiens 2.0 available on arXiv: https://arxiv.org/pdf/2602.10635**
+- 📄 **[Feb 2026] Preprint on a follow-up paper, OmniSapiens 2.0 released**
 - 🎉 **[Jan 2026] Human Behavior Atlas has been accepted to ICLR 2026 Main Conference! https://openreview.net/forum?id=ZKE23BBvlQ**
 - 📄 **[October 2025] Preprint of Human Behavior Atlas Paper released**
 - 🤖 **[October 2025] OmniSapiens-7B RL model released on Hugging Face**

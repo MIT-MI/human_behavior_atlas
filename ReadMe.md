@@ -299,10 +299,12 @@ url={https://openreview.net/forum?id=ZKE23BBvlQ}
 ## OmniSapiens 2.0
 
 ```bibtex
-@article{ong2026omnisapiens,
-  title={Omnisapiens: A foundation model for social behavior processing via heterogeneity-aware relative policy optimization},
-  author={Ong, Keane and Boughorbel, Sabri and Xiao, Luwei and Ekbote, Chanakya and Dai, Wei and Qu, Ao and Wu, Jingyao and Mao, Rui and Hoque, Ehsan and Cambria, Erik and others},
-  journal={arXiv preprint arXiv:2602.10635},
-  year={2026}
+@inproceedings{
+ong2026omnisapiens,
+title={OmniSapiens: A Foundation Model for Social Behavior Processing via Heterogeneity-Aware Relative Policy Optimization},
+author={Keane Ong and Sabri Boughorbel and Luwei Xiao and Chanakya Ekbote and Wei Dai and Ao Qu and Jingyao Wu and Rui Mao and Ehsan Hoque and Erik Cambria and Gianmarco Mengaldo and Paul Pu Liang},
+booktitle={Forty-third International Conference on Machine Learning},
+year={2026},
+url={https://openreview.net/forum?id=MrupCemBMy}
 }
 ```

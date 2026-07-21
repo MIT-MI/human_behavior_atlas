@@ -41,8 +41,8 @@ train:
 
 dataset_config:
   # HF split slicing applied AFTER modality filtering.
-  train_split: "train[:10%]"
-  val_split: "validation[:10%]"
+  train_split: "train"
+  val_split: "validation"
   prompt_key: "problem"
   response_key: "answer"
   image_key: "images"

@@ -43,8 +43,8 @@ train:
   seed: 42
 
 dataset_config:
-  train_split: "train[:5%]"
-  val_split: "validation[:5%]"
+  train_split: "train"
+  val_split: "validation"
   prompt_key: "problem"
   response_key: "answer"
   image_key: "images"
